@@ -3,7 +3,7 @@
 A chat agent with one tool, web search.
 It remembers what you asked and when, re-checks old answers against today's web, and shows a source for every fact.
 
-How it works and why: [DESIGN.md](DESIGN.md) and the diagram in `design.excalidraw` (open it at excalidraw.com).
+How it works and why: [DESIGN.md](DESIGN.md) and the [architecture diagram](https://excalidraw.com/#json=9JkjB_JtCsAz44qEfAHnP,5Wnr11LR5cSPjfaJWkSbXw) (also in the repo as `design.excalidraw`).
 
 ## Run it
 
