@@ -2,6 +2,7 @@
 
 A chat agent with one tool, web search, built to answer one question well: "What did I ask before, and is it still true today?"
 The full diagram is in `design.excalidraw`.
+The chat screen's visual system is in `docs/visual-system.md`.
 
 ## How it works
 
@@ -13,7 +14,7 @@ Code does everything it can; the model does only research and writing.
 4. **Research.** DeepSeek V4.1 Flash decides what else to search with `web_search`: one search per item named, news since a date, at most 10 queries and 3 rounds.
 5. **Write.** The model writes the answer as JSON: the reply, plus each claim with its exact quote from numbered evidence.
 6. **Check.** Code checks each quote against its saved page, and numbers and dates against the quote. Gaps get up to 2 repair searches; anything still unsure is marked "could not confirm".
-7. **Save and reply.** The answer, claims and page copies are saved. Each claim streams once it passes, so nothing unchecked is shown.
+7. **Save and reply.** The answer, claims and page copies are saved. While it works you see live progress ("re-reading the sources from that chat", "searching"); the answer appears once every claim has passed, so nothing unchecked is shown.
 
 The model is one line in `.env`, so any OpenAI-style model can replace it.
 

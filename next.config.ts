@@ -4,6 +4,9 @@ const config: NextConfig = {
   // Next.js writes an AGENTS.md file when it detects an AI coding tool.
   // It is not part of this project, so keep the repo free of it.
   agentRules: false,
+  // The dev badge sat over the sidebar footer and the composer hint.
+  // Build and runtime errors still show in development without it.
+  devIndicators: false,
 };
 
 export default config;

@@ -301,7 +301,20 @@ export async function runTurn(
     const verdict = await safety;
     if (verdict.action === "unchecked") problems.push(`The safety check was skipped: ${verdict.reason}.`);
 
-    // 6. Save and report.
+    // 6. Save and report. Keep every source the answer cites, by its number,
+    // so a reopened chat still links its [n] markers.
+    const cited = new Set<number>([
+      ...[...parsed.answer.matchAll(/\[(\d{1,3})\]/g)].map((m) => Number(m[1])),
+      ...parsed.claims.flatMap((c) => (c.source !== null ? [c.source] : [])),
+    ]);
+    const sources = [...cited]
+      .sort((a, b) => a - b)
+      .flatMap((n) => {
+        const item = evidence[n - 1];
+        return item
+          ? [{ n, url: item.url, title: item.title, readOn: item.readOn, ...(item.pageDate ? { pageDay: item.pageDate.day } : {}) }]
+          : [];
+      });
     const answeredAt = deps.now().toISOString();
     const record = await deps.store.addAnswer({
       chatId: chat.id,
@@ -310,6 +323,7 @@ export async function runTurn(
       question: message,
       answer: parsed.answer,
       claims: parsed.claims.map((c) => ({ text: c.text, quote: c.quote, url: c.url, capturedOn: c.readOn, status: c.status })),
+      sources,
     });
     await deps.store.addTurn(chat.id, { role: "assistant", text: parsed.answer, at: answeredAt, day, answerId: record.id });
 
