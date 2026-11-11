@@ -15,6 +15,7 @@ Code does everything it can; the model only researches and writes.
    The result is same, changed, could not confirm (page gone) or was wrong (never matched).
 4. **Research.** DeepSeek V4.1 Flash searches with `web_search`: one search per thing named, at most 10 queries and 3 rounds.
 5. **Write.** The model returns JSON: the reply, and every fact with its topic, source number and exact quote.
+   Past deadlines are shown as closed, "latest" comes with each item's date, and an assumed place is named.
 6. **Check.** Code checks every quote against the saved page, and every number against its quote.
    Facts on one topic from different sites whose values clash are kept together as "sources disagree", and the reply must give both sides.
    Failures get up to 2 repair rounds that send back only the changes; whatever still fails is dropped.
@@ -46,10 +47,10 @@ There are no sample chats: memory holds only what the user really asked, so a fr
 
 | | Result |
 |---|---|
-| Test set (19 cases on a fake web with dated page versions) | 19/19 cases, 102/102 checks, about $0.02 per full run |
+| Test set (19 cases on a fake web with dated page versions) | 19/19 cases, 102/102 checks, about $0.015 to $0.02 per full run |
 | Live 3-to-5-company pricing questions | 28 to 68 s, was 41 to 136 s before small repairs |
 | Cost per live answer | $0.008 to $0.019; small talk about $0.0002 |
-| Repair round | about 2 s with thinking off, was 40 to 90 s as a full re-write |
+| Repair round | 2 to 5 s with thinking off, was 40 to 90 s as a full re-write |
 
 ## Why it is built this way
 
