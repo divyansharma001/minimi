@@ -349,6 +349,7 @@ export async function runTurn(
         const result = applyRepair(draft, reply.content, evidence, oldChecks, day);
         if (result) {
           problems.push(...result.problems);
+          note("Applied the fixes as small edits");
           return result;
         }
         problems.push("The repair could not be applied exactly, so the answer was written again.");
@@ -356,7 +357,10 @@ export async function runTurn(
         if (!(error instanceof ModelError)) throw error;
         problems.push(`The repair call failed (${error.message}), so the answer was written again.`);
       }
-      return write();
+      onEvent({ type: "status", text: "Rewriting the answer in full" });
+      const rewritten = await write();
+      note("Rewrote the answer in full");
+      return rewritten;
     };
 
     onEvent({ type: "status", text: "Writing the answer" });
@@ -459,6 +463,7 @@ export async function runTurn(
       })),
       sources,
       process: { steps, ms: Date.now() - started, searches: queries.length, pages: pagesRead.size },
+      ...(problems.length > 0 ? { problems: [...problems] } : {}),
     });
     await deps.store.addTurn(chat.id, { role: "assistant", text: parsed.answer, at: answeredAt, day, answerId: record.id });
 

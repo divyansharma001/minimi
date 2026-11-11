@@ -120,6 +120,7 @@ test("'has it changed': old sources are re-read and checked in code before the m
   // The thought process names the day in words and says what the re-check found.
   const steps = deps.store.answersFor(result.chatId)[0]?.process?.steps.map((s) => s.text) ?? [];
   assert.match(steps[0] ?? "", /^Found your chat from Tuesday,? \d+ November 2026$/);
+  assert.ok(steps.includes("Applied the fixes as small edits"), steps.join(" | "));
   assert.ok(steps.some((s) => /^Re-checked \d+ old facts: .*changed/.test(s) && !/model/.test(s)), steps.join(" | "));
   assert.equal(result.claims[0]?.url, "https://basalt.example/pricing");
   // [2] is not Basalt's page here: noted, then fixed by one repair round.
@@ -323,6 +324,9 @@ test("a repair that cannot be applied exactly falls back to a full re-write", as
   assert.match(result.problems.join(" "), /could not be applied exactly, so the answer was written again/);
   assert.deepEqual(result.claims.map((c) => c.text), ["Basalt Pro is $79 a month"]);
   assert.equal(result.checks.repairRounds, 1);
+  const saved = deps.store.answersFor(result.chatId)[0];
+  assert.match(saved?.problems?.join(" ") ?? "", /could not be applied exactly/, "problems are saved with the answer");
+  assert.ok(saved?.process?.steps.some((s) => s.text === "Rewrote the answer in full"));
 });
 
 test("a research call that times out ends the research, not the turn", async () => {

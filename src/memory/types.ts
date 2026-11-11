@@ -71,6 +71,8 @@ export type AnswerRecord = {
   sources?: SourceRecord[];
   /** What the agent did to reach the answer, shown as its thought process. */
   process?: AnswerProcess;
+  /** What went wrong on the way (failed checks, retries, repairs), for diagnosis. Not shown. */
+  problems?: string[];
 };
 
 export type AnswerProcess = {

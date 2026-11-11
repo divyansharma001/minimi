@@ -139,7 +139,7 @@ export function researchSystemPrompt(brief: Brief, maxQueries: number): string {
     [
       `You have one tool, web_search. How to use it:`,
       `- If the user asks about several things (for example 5 tools), search each one in its own call, all in the same turn.`,
-      `- For prices, look for the official pricing page, for example "<name> pricing".`,
+      `- For prices, look for the official pricing page, for example "<name> pricing". For jobs, look for the company's own careers page, for example "<company> careers freshers".`,
       `- If sources in the evidence disagree on a fact the answer needs, and the company's own page (official="yes") is not among them, search for it.`,
       `- For "anything new since <day>", use topic "news" with since set to that day.`,
       `- Don't search for what the evidence below already answers.`,
@@ -210,7 +210,13 @@ export function answerRules(): string {
       `- If two sources give different values for the same thing, never pick one silently and never average them. Give both values, each with its [n], and say which is more reliable and why: the company's own site, a newer page date, or a real difference such as monthly against annual billing, region or plan.`,
       `- Give each side its own claim, with the same topic.`,
     ].join("\n"),
-    `Style: plain words, short, answer first. Use bullets or a small table to compare. Cite every fact with [n].`,
+    [
+      `Dates and place:`,
+      `- Anything whose deadline, end date or expiry is before today is closed. Say so, and never list it as open or current.`,
+      `- When the user asks for the latest or newest, give each item's date (posted, published or updated) from the evidence. If an item's date is not known, say so.`,
+      `- If the answer depends on where the user is (jobs, prices, laws) and they have not said, say which place you assumed, and do not mix places in one list.`,
+    ].join("\n"),
+    `Style: plain words, short, answer first. Answer what was asked; leave out background sections the user did not ask for. Use bullets or a small table to compare. Cite every fact with [n].`,
   );
 }
 

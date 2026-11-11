@@ -124,3 +124,13 @@ test("different dates for the same event are a disagreement", () => {
   const b = nodeFact("Node.js 22 reaches end of life on 2027-10-31.", "oldblog.example", topic);
   assert.equal(findConflicts([a, b]).length, 1);
 });
+
+// A false alarm from a live run (fresher jobs, 11 Nov 2026): the same pay
+// written as "4.0" on one page and "4" on another.
+test("numbers are compared by value: 4.0 and 4 are one value", () => {
+  assert.deepEqual(valuesIn("₹4.0 LPA – ₹5.40 LPA"), ["4", "5.4"]);
+  const topic = "Cognizant GenC fresher salary";
+  const a = fact("Campusdrive.in lists Cognizant GenC hiring at ₹4.0 LPA – ₹5.4 LPA.", "https://campusdrive.in/jobs", 1, { topic });
+  const b = fact("Cognizant's GenC categories offer 6.75 LPA for GenC Next, 5.4 LPA for GenC Pro and 4 LPA for GenC.", "https://unstop.com/blog", 2, { topic });
+  assert.deepEqual(findConflicts([a, b]), []);
+});

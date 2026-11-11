@@ -67,7 +67,10 @@ export function valuesIn(text: string, ignore: string[] = []): string[] {
       return " ";
     });
   }
-  for (const n of numbersIn(rest)) if (!YEAR.test(n) && !ignore.includes(n)) values.add(n);
+  // Numbers by value, so "4.0" and "4", or "5.40" and "5.4", are one value.
+  const byValue = (n: string) => String(Number(n));
+  const ignored = new Set(ignore.map(byValue));
+  for (const n of numbersIn(rest)) if (!YEAR.test(n) && !ignored.has(byValue(n))) values.add(byValue(n));
   return [...values];
 }
 
