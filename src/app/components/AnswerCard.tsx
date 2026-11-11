@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightLeft, Check, CircleHelp, ExternalLink, Undo2 } from "lucide-react";
+import { ArrowRightLeft, Check, ChevronDown, CircleHelp, ExternalLink, Undo2 } from "lucide-react";
 import type { ClaimStatus } from "@/memory/types.ts";
 import type { ClaimView, MessageView, SourceView } from "../view.ts";
 import { Markdown } from "./Markdown.tsx";
@@ -22,6 +22,16 @@ function StatusPill({ status }: { status: ClaimStatus }) {
       {label}
     </span>
   );
+}
+
+/**
+ * How many facts have each status, in the order of STATUS, for the closed
+ * dropdown: "12 checked, 1 changed" says whether to open it.
+ */
+function tally(claims: ClaimView[]) {
+  return (Object.keys(STATUS) as ClaimStatus[])
+    .map((status) => ({ status, count: claims.filter((c) => c.status === status).length }))
+    .filter((t) => t.count > 0);
 }
 
 /**
@@ -110,14 +120,26 @@ export function AnswerCard({ message }: { message: MessageView }) {
     <article className="card" aria-label="Answer">
       <Markdown text={message.text} anchor={anchor} pageOf={pageOf} />
       {claims.length > 0 && (
-        <>
-          <h2 className="section-label">Checked facts</h2>
+        <details className="facts-box">
+          <summary>
+            <span className="facts-title">
+              Checked facts <span className="facts-count">{claims.length}</span>
+            </span>
+            <span className="tallies">
+              {tally(claims).map(({ status, count }) => (
+                <span className={`tally ${STATUS[status].tone}`} key={status}>
+                  {count} {STATUS[status].label.toLowerCase()}
+                </span>
+              ))}
+            </span>
+            <ChevronDown className="chevron" size={18} aria-hidden="true" />
+          </summary>
           <ul className="facts">
             {claims.map((claim, i) => (
               <Fact claim={claim} anchor={anchor} index={i} page={pageOfUrl.get(claim.url)} key={`${claim.text}-${i}`} />
             ))}
           </ul>
-        </>
+        </details>
       )}
       {pages.length > 0 && (
         <>

@@ -57,8 +57,14 @@ turndown.addRule("linkWordsOnly", { filter: "a", replacement: (content) => conte
 
 const stripComments = (text: string) => text.replace(/<!--[\s\S]*?-->/g, "");
 
+// Social posts fake bold and italic with maths letters (𝐋𝐈𝐕𝐄 for LIVE).
+// They break search, quote checks and fonts, so they become plain letters.
+// Only that block is folded: "m²" and "™" stay as they are.
+const MATHS_LETTERS = /[\u{1D400}-\u{1D7FF}]/gu;
+
 const tidy = (markdown: string) =>
   markdown
+    .replace(MATHS_LETTERS, (c) => c.normalize("NFKC"))
     .replace(/ /g, " ")
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")

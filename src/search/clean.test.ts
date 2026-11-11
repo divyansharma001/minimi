@@ -107,3 +107,8 @@ test("images are dropped and a heading with a line break stays on one line", () 
   const { markdown } = cleanPage(page);
   assert.equal(markdown, "## Your questions, answered\n\nPlans are monthly.");
 });
+
+test("maths-letter bold from social posts becomes plain letters, other symbols stay", () => {
+  const page = cleanPage(html("<main><p>Modulus 𝐢𝐬 𝐋𝐈𝐕𝐄! Storage is 3 m² at 𝟱 GB. Basalt™</p></main>"));
+  assert.match(page.markdown, /Modulus is LIVE! Storage is 3 m² at 5 GB\. Basalt™/);
+});

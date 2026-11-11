@@ -10,7 +10,7 @@
 // (A JSON block cannot contain a line that is exactly "---": strings keep
 // their newlines escaped.)
 
-import { mkdir, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -47,6 +47,17 @@ export function writeFileSafely(path: string, content: string): Promise<void> {
       await writeFile(temp, content, "utf8");
       await rename(temp, path);
     });
+  queues.set(path, next);
+  void next.finally(() => {
+    if (queues.get(path) === next) queues.delete(path);
+  });
+  return next;
+}
+
+/** Deletes a file once any write already queued for it has finished. */
+export function removeFileSafely(path: string): Promise<void> {
+  const previous = queues.get(path) ?? Promise.resolve();
+  const next = previous.catch(() => undefined).then(() => rm(path, { force: true }));
   queues.set(path, next);
   void next.finally(() => {
     if (queues.get(path) === next) queues.delete(path);

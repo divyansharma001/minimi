@@ -58,19 +58,27 @@ Weights 400, 500 and 600 only: hierarchy comes from size and weight steps, never
 
 ## Components
 
-- **Answer card:** prose with citation chips, then "Checked facts" rows (grey sentence, bold value, source chip and read date, status pill), then "Sources" numbered by page with the day read and the page's own date.
+- **Answer card:** prose with citation chips, then "Checked facts", then "Sources" numbered by page with the day read and the page's own date.
+- **Checked facts** is a dropdown, closed by default.
+The closed row shows a small pill per status with its count ("12 checked", "1 changed"), so a change is visible without opening it.
+Open, each row shows a grey sentence, the bold value, the source chip and read date, and the status pill.
+- **Your messages** have edit and delete buttons: left of the bubble on hover or keyboard focus, and always shown under it on touch screens.
+Edit turns the bubble into a white panel with "Cancel" and "Ask again", and says what it will replace.
+Delete asks inline on a small white card, never in a pop-up.
+- **Buttons:** pill shaped; primary green-800, delete red-600 with white text (7:1), quiet ones have no fill until hover.
 - **Citations** are numbered by page, not by passage, so one page is one number everywhere.
 - **Fact rows:** pill on the right of the text on desktop; on phones the pill sits on the source line, and a long site name shortens before the read date does.
 - **Composer:** white panel, 28px corners; send is a flat green-800 circle, and when disabled a green-100 circle with a green-700 arrow.
 - **Working state:** live steps with a spinner, then a skeleton for the answer.
 - **Tables** keep whole words and scroll sideways in their frame, with edge shadows only while more table lies that way.
 - **Sidebar:** chats grouped Today, Yesterday, weekday names for the past week, then dates; a drawer on phones.
+A bin shows on a row on hover (on touch screens, on the open chat), and the row turns into "Delete this chat? Cancel / Delete".
 
 ## Motion
 
 Easing `cubic-bezier(0.2, 0, 0, 1)`, 150 to 220ms.
 Cards and fact rows rise 6px as they arrive; buttons press to 0.95 to 0.98.
-Reduced-motion settings turn all of it off.
+Reduced-motion settings turn all of it off, smooth scrolling included.
 
 ## Browser surfaces
 

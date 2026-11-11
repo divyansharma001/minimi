@@ -122,3 +122,68 @@ test("titles are the first line, cut at a word", () => {
   assert.ok(long.endsWith("…"));
   assert.equal(titleFrom("   "), "Untitled chat");
 });
+
+// ---------- Deleting ----------
+
+async function threeQuestions(store: MemoryStore) {
+  const chat = await store.createChat({ firstMessage: "q1", at: "2026-11-03T10:00:00Z", day: "2026-11-03" });
+  for (const n of [1, 2, 3]) {
+    const answerId = `a${n}`;
+    await store.addTurn(chat.id, { role: "user", text: `q${n}`, at: "2026-11-03T10:00:00Z", day: "2026-11-03" });
+    await store.addTurn(chat.id, { role: "assistant", text: `answer ${n}`, at: "2026-11-03T10:00:05Z", day: "2026-11-03", answerId });
+    await store.addAnswer({ id: answerId, chatId: chat.id, at: "", day: "2026-11-03", question: `q${n}`, answer: `answer ${n}`, claims: [] });
+  }
+  return chat;
+}
+
+test("deleting a message removes it and its answer, and nothing else", async () => {
+  const dir = await tempDir();
+  const { store } = await MemoryStore.open(dir);
+  const chat = await threeQuestions(store);
+  await store.deleteMessage(chat.id, 2);
+
+  const reopened = (await MemoryStore.open(dir)).store;
+  assert.deepEqual(reopened.getChat(chat.id)?.turns.map((t) => t.text), ["q1", "answer 1", "q3", "answer 3"]);
+  assert.deepEqual(reopened.answersFor(chat.id).map((a) => a.id), ["a1", "a3"]);
+  assert.equal((await readdir(join(dir, "answers"))).length, 2);
+});
+
+test("cutting from a message, before an edit, removes it and everything after", async () => {
+  const dir = await tempDir();
+  const { store } = await MemoryStore.open(dir);
+  const chat = await threeQuestions(store);
+  await store.truncateFrom(chat.id, 2, "q2 edited");
+  assert.deepEqual(store.getChat(chat.id)?.turns.map((t) => t.text), ["q1", "answer 1"]);
+  assert.deepEqual((await readdir(join(dir, "answers"))).length, 1);
+});
+
+test("editing the first message keeps the chat and renames it", async () => {
+  const dir = await tempDir();
+  const { store } = await MemoryStore.open(dir);
+  const chat = await threeQuestions(store);
+  const cut = await store.truncateFrom(chat.id, 0, "Which Postgres hosts have a free plan?");
+  assert.deepEqual(cut.turns, []);
+  assert.equal((await MemoryStore.open(dir)).store.getChat(chat.id)?.title, "Which Postgres hosts have a free plan?");
+});
+
+test("only the user's own messages can be deleted or edited", async () => {
+  const { store } = await MemoryStore.open(await tempDir());
+  const chat = await threeQuestions(store);
+  await assert.rejects(store.deleteMessage(chat.id, 1), /not a message from the user/);
+  await assert.rejects(store.truncateFrom(chat.id, 99, "x"), /not a message from the user/);
+});
+
+test("deleting a chat, or its last message, removes its files", async () => {
+  const dir = await tempDir();
+  const { store } = await MemoryStore.open(dir);
+  const chat = await threeQuestions(store);
+  await store.deleteChat(chat.id);
+  assert.equal(store.getChat(chat.id), undefined);
+  assert.deepEqual(await readdir(join(dir, "chats")), []);
+  assert.deepEqual(await readdir(join(dir, "answers")), []);
+
+  const single = await store.createChat({ firstMessage: "only", at: "2026-11-03T10:00:00Z", day: "2026-11-03" });
+  await store.addTurn(single.id, { role: "user", text: "only", at: "2026-11-03T10:00:00Z", day: "2026-11-03" });
+  assert.equal(await store.deleteMessage(single.id, 0), null, "an emptied chat is gone");
+  assert.equal(store.getChat(single.id), undefined);
+});

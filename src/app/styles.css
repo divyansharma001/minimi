@@ -83,6 +83,10 @@
     --fast: 0ms;
     --normal: 0ms;
   }
+
+  * {
+    scroll-behavior: auto !important;
+  }
 }
 
 /* ---------- Base and browser surfaces ---------- */
@@ -285,11 +289,28 @@ button {
   color: var(--text-3);
 }
 
-.chat-item {
+/* A row holds the chat button and its delete button side by side. */
+.chat-row {
   display: flex;
   align-items: center;
+  border-radius: var(--radius-lg);
+  transition: background var(--normal) var(--ease);
+}
+
+.chat-row:hover {
+  background: var(--surface-2);
+}
+
+.chat-row[data-active="true"] {
+  background: var(--g-100);
+}
+
+.chat-item {
+  display: flex;
+  flex: 1;
+  align-items: center;
   gap: 8px;
-  width: 100%;
+  min-width: 0;
   min-height: 40px;
   padding: 8px 10px;
   border: 0;
@@ -298,16 +319,51 @@ button {
   text-align: left;
   font-size: 15px;
   color: var(--text-2);
-  transition: background var(--normal) var(--ease);
-}
-
-.chat-item:hover {
-  background: var(--surface-2);
 }
 
 .chat-item[aria-current="true"] {
-  background: var(--g-100);
   color: var(--g-1000);
+}
+
+/* Shown on hover or keyboard focus; on touch screens, on the open chat. */
+.row-action {
+  display: none;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-right: 4px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--text-3);
+  transition:
+    background var(--normal) var(--ease),
+    color var(--normal) var(--ease);
+}
+
+.chat-row:hover .row-action,
+.chat-row:focus-within .row-action {
+  display: grid;
+}
+
+.row-action:hover {
+  background: var(--white);
+  color: var(--red-600);
+}
+
+.chat-row-confirm {
+  gap: 6px;
+  min-height: 40px;
+  padding: 4px 4px 4px 10px;
+  background: var(--red-50);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--red-700);
+}
+
+.chat-row-confirm:hover {
+  background: var(--red-50);
 }
 
 .chat-item-title {
@@ -460,8 +516,210 @@ button {
   gap: 20px;
 }
 
-.message-user {
+/* Your message, with its edit and delete buttons to its left. */
+.user-turn {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.message-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.user-turn:hover .message-actions,
+.message-actions:focus-within {
+  opacity: 1;
+}
+
+.message-action {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--g-800);
+  transition:
+    background var(--normal) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.message-action:hover {
+  background: rgb(255 255 255 / 60%);
+}
+
+.message-action:active {
+  transform: scale(0.95);
+}
+
+/* No hover on touch screens: keep the buttons in view, under the bubble. */
+@media (hover: none) {
+  .message-actions {
+    order: 2;
+    flex-basis: 100%;
+    justify-content: flex-end;
+    margin-top: -2px;
+    opacity: 1;
+  }
+
+  .chat-row[data-active="true"] .row-action {
+    display: grid;
+  }
+}
+
+/* An inline question before deleting: no pop-up. */
+.confirm-line {
+  display: flex;
+  flex-basis: 100%;
+  justify-content: flex-end;
+}
+
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 12px;
+  padding: 6px 6px 6px 18px;
+  border-radius: var(--radius-2xl);
+  background: var(--white);
+  box-shadow: var(--shadow-card);
+  font-size: 14px;
+  color: var(--text-2);
+  animation: rise var(--normal) var(--ease) both;
+}
+
+.confirm p {
+  margin: 0;
+}
+
+/* Editing a message: a white panel like the composer, in its place. */
+.user-edit {
   align-self: flex-end;
+  width: min(100%, 640px);
+  padding: 12px 12px 12px 18px;
+  border: 1px solid rgb(255 255 255 / 70%);
+  border-radius: 22px;
+  background: var(--white);
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 3px rgb(131 192 64 / 28%);
+  animation: rise var(--normal) var(--ease) both;
+}
+
+.user-edit textarea {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  max-height: 240px;
+  padding: 4px 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.user-edit-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 8px;
+}
+
+.user-edit-foot p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.button-row {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--radius-full);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition:
+    background var(--normal) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.button-small {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.button-quiet {
+  background: transparent;
+  color: var(--text-2);
+}
+
+.button-quiet:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+
+.chat-row-confirm .button-quiet {
+  color: var(--red-700);
+}
+
+.chat-row-confirm .button-quiet:hover:not(:disabled) {
+  background: rgb(255 255 255 / 70%);
+}
+
+.button-primary {
+  background: var(--g-800);
+  color: var(--white);
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--g-900);
+}
+
+.button-primary:disabled {
+  background: var(--g-100);
+  color: var(--g-700);
+  cursor: default;
+}
+
+.button-danger {
+  background: var(--red-600);
+  color: var(--white);
+}
+
+.button-danger:hover:not(:disabled) {
+  background: var(--red-700);
+}
+
+.button:disabled {
+  cursor: default;
+}
+
+.message-user {
   max-width: min(80%, 560px);
   padding: 12px 18px;
   border-radius: 22px 22px 6px 22px;
@@ -644,6 +902,85 @@ button {
 }
 
 /* ---------- Checked facts (the reference card's rows) ---------- */
+
+/* Closed by default. The closed row still shows each status's count, so a
+   changed or wrong fact is visible without opening it. */
+.facts-box {
+  margin-top: 20px;
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-xl);
+}
+
+.facts-box summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 10px 14px 10px 16px;
+  border-radius: calc(var(--radius-xl) - 1px);
+  list-style: none;
+  cursor: pointer;
+  transition: background var(--normal) var(--ease);
+}
+
+.facts-box summary::-webkit-details-marker {
+  display: none;
+}
+
+.facts-box summary:hover {
+  background: var(--surface);
+}
+
+.facts-box[open] summary {
+  border-bottom: 1px solid var(--stroke-2);
+  border-radius: calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px) 0 0;
+}
+
+.facts-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.facts-count {
+  margin-left: 4px;
+  font-weight: 400;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.tallies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tally {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius-full);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.chevron {
+  color: var(--text-3);
+  transition: transform var(--normal) var(--ease);
+}
+
+.facts-box[open] .chevron {
+  transform: rotate(180deg);
+}
+
+.facts-box .facts {
+  padding: 0 16px;
+}
 
 .facts {
   margin: 0;

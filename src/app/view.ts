@@ -40,6 +40,8 @@ export type AnswerView = {
 
 export type MessageView = {
   id: string;
+  /** Its place in the chat, used to edit or delete it. Missing until saved. */
+  turn?: number;
   role: "user" | "assistant";
   text: string;
   at: string;

@@ -12,7 +12,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { fromFile, slug, toFile, writeFileSafely } from "./files.ts";
+import { fromFile, removeFileSafely, slug, toFile, writeFileSafely } from "./files.ts";
 import { redactSecrets } from "../guardrails/redact.ts";
 import type { AnswerRecord, ChatRecord, IsoDate, Turn } from "./types.ts";
 
@@ -133,12 +133,13 @@ export class MemoryStore {
     return [...this.answers.values()].filter((a) => a.chatId === chatId).sort((a, b) => a.at.localeCompare(b.at));
   }
 
-  async createChat(input: { firstMessage: string; at: string; day: IsoDate; id?: string; title?: string }) {
+  async createChat(input: { firstMessage: string; at: string; day: IsoDate; id?: string; title?: string; demo?: boolean }) {
     const chat: ChatRecord = {
       id: input.id ?? shortId(),
       title: input.title ? clean(input.title) : titleFrom(input.firstMessage),
       startedAt: input.at,
       turns: [],
+      ...(input.demo ? { demo: true } : {}),
     };
     const path = join(this.dir, CHATS, `${input.day}-${slug(chat.title)}-${chat.id}.md`);
     this.paths.set(chat.id, path);
@@ -168,6 +169,64 @@ export class MemoryStore {
     this.answers.set(answer.id, answer);
     await writeFileSafely(path, toFile(answer, answerBody(answer)));
     return answer;
+  }
+
+  // ---------- Deleting, at the user's request ----------
+  // Answers are never edited, but the user may remove what they asked and
+  // what was answered. Saved page copies are kept: they are evidence other
+  // answers may cite.
+
+  /** Deletes the message at `index` (the user's) and the answer right after it. */
+  async deleteMessage(chatId: string, index: number): Promise<ChatRecord | null> {
+    const chat = this.requireUserTurn(chatId, index);
+    const end = chat.turns[index + 1]?.role === "assistant" ? index + 2 : index + 1;
+    return this.removeTurns(chat, index, end);
+  }
+
+  /**
+   * Deletes the message at `index` and everything after it, before an edit
+   * asks `newText` in its place. The chat stays even if this empties it, and
+   * editing the first message renames the chat.
+   */
+  async truncateFrom(chatId: string, index: number, newText: string): Promise<ChatRecord> {
+    const chat = this.requireUserTurn(chatId, index);
+    const renamed = index === 0 ? { ...chat, title: titleFrom(newText) } : chat;
+    return (await this.removeTurns(renamed, index, chat.turns.length, { keepEmpty: true })) as ChatRecord;
+  }
+
+  async deleteChat(chatId: string): Promise<void> {
+    const chat = this.chats.get(chatId);
+    if (!chat) throw new Error(`No chat with id ${chatId}`);
+    await this.removeTurns(chat, 0, chat.turns.length);
+  }
+
+  private requireUserTurn(chatId: string, index: number): ChatRecord {
+    const chat = this.chats.get(chatId);
+    if (!chat) throw new Error(`No chat with id ${chatId}`);
+    if (chat.turns[index]?.role !== "user") throw new Error(`Turn ${index} is not a message from the user`);
+    return chat;
+  }
+
+  /** Removes turns [from, to) and their answer files. A chat left empty is deleted. */
+  private async removeTurns(chat: ChatRecord, from: number, to: number, options: { keepEmpty?: boolean } = {}): Promise<ChatRecord | null> {
+    for (const turn of chat.turns.slice(from, to)) {
+      if (!turn.answerId) continue;
+      const path = this.paths.get(turn.answerId);
+      this.answers.delete(turn.answerId);
+      this.paths.delete(turn.answerId);
+      if (path) await removeFileSafely(path);
+    }
+    const turns = [...chat.turns.slice(0, from), ...chat.turns.slice(to)];
+    if (turns.length === 0 && !options.keepEmpty) {
+      const path = this.paths.get(chat.id);
+      this.chats.delete(chat.id);
+      this.paths.delete(chat.id);
+      if (path) await removeFileSafely(path);
+      return null;
+    }
+    const updated: ChatRecord = { ...chat, turns };
+    await this.saveChat(updated);
+    return updated;
   }
 
   private async saveChat(chat: ChatRecord) {

@@ -54,6 +54,7 @@ export function chatView(store: MemoryStore, chat: ChatRecord): ChatView {
     const record = turn.answerId ? store.getAnswer(turn.answerId) : undefined;
     return {
       id: `${chat.id}-${i}`,
+      turn: i,
       role: turn.role,
       text: turn.text,
       at: turn.at,
@@ -68,8 +69,10 @@ export function messageFromTurn(store: MemoryStore, result: TurnResult): Message
   const chat = store.getChat(result.chatId);
   const last = chat?.turns.at(-1);
   const record = last?.answerId ? store.getAnswer(last.answerId) : undefined;
+  const turn = (chat?.turns.length ?? 1) - 1;
   return {
-    id: `${result.chatId}-${(chat?.turns.length ?? 1) - 1}`,
+    id: `${result.chatId}-${turn}`,
+    turn,
     role: "assistant",
     text: result.answer,
     at: last?.at ?? new Date().toISOString(),
