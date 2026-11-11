@@ -1,0 +1,25 @@
+# Dependencies and build output
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Secrets: only .env.example is committed
+.env
+.env.*
+!.env.example
+
+# The agent's own memory lives on the user's machine, not in the repo.
+# Anchored to the project root with "/": a bare "memory/" also matched
+# src/memory/, which hid the memory code from git.
+/memory/
+
+# Test runs: the numbers worth keeping go in DESIGN.md
+/eval-results/
+
+# Design review screenshots: evidence for one review, not source
+.impeccable/review/
+
+# OS and editor files
+.DS_Store
