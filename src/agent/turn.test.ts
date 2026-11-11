@@ -167,6 +167,15 @@ test("two broken replies end in a plain apology, not a crash, and the chat is st
   assert.equal(deps.store.getChat(result.chatId)?.turns.length, 2);
 });
 
+test("a reply cut off by the token cap is asked again with twice the room", async () => {
+  const cutOff = () => ({ content: '{"answer": "Glad', finishReason: "length" });
+  const model = new ScriptedModel([cutOff, json({ answer: "Glad it helped!", claims: [] })]);
+  const result = await runTurn({ message: "Thanks, that's really helpful!" }, { ...deps, model });
+  assert.equal(result.answer, "Glad it helped!");
+  assert.deepEqual(model.requests.map((r) => r.maxTokens), [8_000, 16_000]);
+  assert.match(result.problems.join(" "), /ran out of room after 8,000 tokens/);
+});
+
 test("the answer and its claims are saved, so the next turn can recall them", async () => {
   const model = new ScriptedModel([
     search({ queries: ["Basalt pricing"] }),

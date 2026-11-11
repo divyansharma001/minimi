@@ -80,6 +80,29 @@ test("errors become plain messages", async () => {
 });
 
 test("an empty reply is an error, not a blank answer", async () => {
-  const { fetchImpl } = fakeRouter([new Response(JSON.stringify({ choices: [] }), { status: 200 })]);
+  const empty = () => new Response(JSON.stringify({ choices: [] }), { status: 200 });
+  const { fetchImpl } = fakeRouter([empty(), empty()]);
   await assert.rejects(new OpenRouterClient("k", "m", { fetchImpl }).complete({ messages: [] }), /empty reply/);
+});
+
+test("a provider that fails mid-reply (200 with an error) is retried once", async () => {
+  const failed = new Response(JSON.stringify({ error: { code: 502, message: "Provider disconnected" } }), { status: 200 });
+  const { bodies, fetchImpl } = fakeRouter([failed, reply({ content: "ok" })]);
+  const result = await new OpenRouterClient("k", "m", { fetchImpl }).complete({ messages: [] });
+  assert.equal(result.content, "ok");
+  assert.equal(bodies.length, 2);
+
+  const inChoice = () =>
+    new Response(JSON.stringify({ choices: [{ message: { content: "partial" }, finish_reason: "error" }] }), { status: 200 });
+  const twice = fakeRouter([inChoice(), inChoice()]);
+  await assert.rejects(
+    new OpenRouterClient("k", "m", { fetchImpl: twice.fetchImpl }).complete({ messages: [] }),
+    (e: unknown) => e instanceof ModelError && e.reason === "provider",
+  );
+});
+
+test("a reply cut off by the token cap says so", async () => {
+  const { fetchImpl } = fakeRouter([reply({ content: '{"answer": "Neon' }, { choices: [{ message: { content: '{"answer": "Neon' }, finish_reason: "length" }] })]);
+  const result = await new OpenRouterClient("k", "m", { fetchImpl }).complete({ messages: [] });
+  assert.equal(result.finishReason, "length");
 });

@@ -69,14 +69,27 @@ export class OpenRouterClient implements ModelClient {
       provider: { require_parameters: true, data_collection: "deny", max_price: this.maxPrice },
     };
 
-    let response = await this.post(body);
-    if (response.status === 429 || response.status >= 500) {
+    const send = async () => {
+      const response = await this.post(body);
+      return { response, data: (await response.json().catch(() => ({}))) as RawReply };
+    };
+    // A provider that fails after it started answering still sends 200 OK,
+    // with an error in the body instead of an answer (OpenRouter's docs,
+    // "Errors and debugging"). That is a provider failure, like a 502.
+    const failedMidway = (response: Response, data: RawReply) =>
+      response.ok && (data.error !== undefined || !data.choices?.[0]?.message || data.choices[0].finish_reason === "error");
+
+    let { response, data } = await send();
+    if (response.status === 429 || response.status >= 500 || failedMidway(response, data)) {
       // One quick retry: the router picks another provider.
       await new Promise((resolve) => setTimeout(resolve, 1_000));
-      response = await this.post(body);
+      ({ response, data } = await send());
     }
-    const data = (await response.json().catch(() => ({}))) as RawReply;
     if (!response.ok) throw this.errorFor(response.status, data.error?.message);
+    if (failedMidway(response, data)) {
+      const detail = data.error?.message ? ` ${data.error.message}` : "";
+      throw new ModelError("provider", `The model sent back an empty reply.${detail}`);
+    }
 
     const choice = data.choices?.[0];
     if (!choice?.message) throw new ModelError("bad-reply", "The model sent back an empty reply.");
@@ -100,6 +113,7 @@ export class OpenRouterClient implements ModelClient {
         cost: data.usage?.cost ?? 0,
       },
       ...(data.provider ? { provider: data.provider } : {}),
+      ...(typeof choice.finish_reason === "string" ? { finishReason: choice.finish_reason } : {}),
     };
   }
 

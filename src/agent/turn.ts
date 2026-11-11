@@ -83,6 +83,9 @@ class Refused extends Error {
 
 const urlsIn = (text: string) => text.match(/https?:\/\/[^\s)<>\]"']+/g) ?? [];
 
+/** Token caps for the writer: first try, then a retry after a cut-off reply. */
+const WRITER_TOKEN_CAPS = [8_000, 16_000];
+
 export async function runTurn(
   input: { chatId?: string; message: string },
   deps: TurnDeps,
@@ -245,12 +248,16 @@ export async function runTurn(
         { role: "system", content: writerSystemPrompt(brief()) },
         { role: "user", content: writerBrief(brief()) },
       ];
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      // The model's hidden thinking counts against the token cap, so the cap
+      // is generous: tokens are billed only when used. A reply cut off by the
+      // cap is asked again with twice the room, since the same cap would cut
+      // it off again.
+      for (const maxTokens of WRITER_TOKEN_CAPS) {
         const reply = await deps.model.complete({
           messages: writerMessages,
           jsonSchema: { name: "answer", schema: ANSWER_SCHEMA as unknown as Record<string, unknown> },
           effort: "medium",
-          maxTokens: 4_000,
+          maxTokens,
         });
         count(reply.usage);
         const result = parseAnswer(reply.content, evidence, oldChecks, day);
@@ -258,7 +265,11 @@ export async function runTurn(
           problems.push(...result.problems);
           return result;
         }
-        problems.push("The model's answer was not valid JSON, so it was asked again.");
+        problems.push(
+          reply.finishReason === "length"
+            ? `The model ran out of room after ${maxTokens.toLocaleString("en-GB")} tokens, so it was asked again with more.`
+            : "The model's answer was not valid JSON, so it was asked again.",
+        );
       }
       throw new ModelError("bad-reply", "The model did not return a usable answer.");
     };

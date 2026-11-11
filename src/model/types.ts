@@ -36,6 +36,8 @@ export type ModelReply = {
   usage: Usage;
   /** Which company served the request, when the router says. */
   provider?: string;
+  /** Why the model stopped: "length" means it ran out of tokens mid-reply. */
+  finishReason?: string;
 };
 
 export interface ModelClient {
