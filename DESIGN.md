@@ -74,5 +74,6 @@ A fresh copy gets three real demo chats, dated "last Tuesday", "Monday" and "3 N
 
 - Grow the test set, and score against ChatGPT and Perplexity on dated questions.
 - Allow numbers from a page's own title in quote checks ("Node.js 20" on a Node 20 page).
+- Compare like with like in conflicts: today any two dates are compared, so "Active vs Maintenance" is caught only when the dates around it happen to differ.
 - Rank sources by more than "official site first".
 - Handle sites that block bots, and read logged-in pages through a vault.
