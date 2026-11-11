@@ -280,7 +280,7 @@ export function ChatApp() {
                 {chats.some((c) => c.demo) && (
                   <p className="notice">
                     <ShieldCheck size={16} aria-hidden="true" />
-                    The chats marked Demo came with this copy, so you can ask about past dates straight away.
+                    The chats marked Demo came with this copy, so you can ask about past dates straight away. Their facts show the day each page was really read.
                   </p>
                 )}
               </section>

@@ -46,7 +46,7 @@ export function answerFromRecord(record: AnswerRecord): AnswerView {
     url: c.url,
     readOn: c.capturedOn,
   }));
-  return { claims, sources, refused: false };
+  return { claims, sources, refused: false, ...(record.process ? { process: record.process } : {}) };
 }
 
 export function chatView(store: MemoryStore, chat: ChatRecord): ChatView {

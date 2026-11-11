@@ -14,7 +14,7 @@
 import { todayIn } from "../memory/dates.ts";
 import { recall } from "../memory/recall.ts";
 import type { MemoryStore } from "../memory/store.ts";
-import type { ChatRecord, StoredClaim } from "../memory/types.ts";
+import type { ChatRecord, ClaimStatus, StoredClaim } from "../memory/types.ts";
 import type { ChatMessage, ModelClient, Usage } from "../model/types.ts";
 import { ModelError } from "../model/types.ts";
 import { LinkGate } from "../search/link-gate.ts";
@@ -34,8 +34,7 @@ import {
   researchSystemPrompt,
   writerBrief,
   writerSystemPrompt,
-  type Brief,
-} from "./prompts.ts";
+  type Brief, dayName } from "./prompts.ts";
 
 export const TURN_LIMITS = {
   researchRounds: 3,
@@ -86,12 +85,31 @@ const urlsIn = (text: string) => text.match(/https?:\/\/[^\s)<>\]"']+/g) ?? [];
 /** Token caps for the writer: first try, then a retry after a cut-off reply. */
 const WRITER_TOKEN_CAPS = [8_000, 16_000];
 
+/** How a re-checked old fact reads in the thought process. */
+const OLD_CHECK_LABEL: Record<ClaimStatus | "not-read", string> = {
+  same: "still on their page",
+  supported: "still on their page",
+  changed: "changed",
+  "was-wrong": "were wrong when first said",
+  "cannot-confirm": "page is gone",
+  "not-read": "page could not be re-read",
+};
+
 export async function runTurn(
   input: { chatId?: string; message: string },
   deps: TurnDeps,
-  onEvent: (event: TurnEvent) => void = () => {},
+  report: (event: TurnEvent) => void = () => {},
 ): Promise<TurnResult> {
   const started = Date.now();
+  // Every step is shown live and kept, to be saved as the thought process.
+  const steps: { text: string; ms: number }[] = [];
+  const note = (text: string) => {
+    if (steps.at(-1)?.text !== text) steps.push({ text, ms: Date.now() - started });
+  };
+  const onEvent = (event: TurnEvent) => {
+    note(event.text);
+    report(event);
+  };
   const now = deps.now();
   const day = todayIn(deps.timeZone, now);
   // Secrets never reach a model or a file. The user is told.
@@ -129,7 +147,7 @@ export async function runTurn(
   const recalled = recall(deps.store, message, { now, timeZone: deps.timeZone, excludeChatId: chat.id });
   const path = choosePath(message, recalled.refersToPast);
   if (recalled.chats.length > 0) {
-    onEvent({ type: "status", text: `Found ${recalled.chats.length === 1 ? "your chat" : `${recalled.chats.length} chats`} from ${recalled.chats.map((c) => c.chat.turns[0]?.day).join(", ")}` });
+    onEvent({ type: "status", text: `Found ${recalled.chats.length === 1 ? "your chat" : `${recalled.chats.length} chats`} from ${[...new Set(recalled.chats.map((c) => c.chat.turns[0]?.day ?? c.chat.startedAt.slice(0, 10)))].map(dayName).join(", ")}` });
   }
 
   // Links the agent may open: from the user, old sources, and this chat's answers.
@@ -173,6 +191,12 @@ export async function runTurn(
       for (const s of result.snapshots) copies.set(s.url, s);
     }
     oldChecks = checkOldClaims(oldClaims, copies);
+    const counts = new Map<string, number>();
+    for (const check of oldChecks) {
+      const label = OLD_CHECK_LABEL[check.status ?? "not-read"];
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+    note(`Re-checked ${oldChecks.length} old fact${oldChecks.length === 1 ? "" : "s"}: ${[...counts].map(([label, n]) => `${n} ${label}`).join(", ")}`);
   }
 
   const brief = (): Brief => ({
@@ -221,6 +245,12 @@ export async function runTurn(
             onEvent({ type: "status", text: `Searching: ${(limited.queries ?? []).join("; ") || "reading pages"}` });
             const result = await webSearch(limited, search, true);
             const { fresh, startRef } = addResult(result);
+            const read = result.pages.filter((p) => p.outcome === "read").length;
+            const notRead = result.pages.length - read;
+            onEvent({
+              type: "status",
+              text: `Read ${read} page${read === 1 ? "" : "s"}${notRead > 0 ? ` (${notRead} could not be read)` : ""}`,
+            });
             const failed = result.pages
               .filter((p) => p.outcome !== "read")
               .map((p) => `Could not read ${p.url}: ${p.outcome}${p.detail ? `, ${p.detail}` : ""}.`);
@@ -307,6 +337,10 @@ export async function runTurn(
     parsed = { ...parsed, claims: parsed.claims.filter((c) => !dropped.includes(c)) };
     checks.dropped = dropped.length;
     checks.claims = parsed.claims.length;
+    note(
+      `Checked ${checks.claims} ${checks.claims === 1 ? "fact against its page" : "facts against their pages"}` +
+        (checks.dropped > 0 ? `, dropped ${checks.dropped} that did not hold up` : ""),
+    );
 
     await mustBeSafe();
     const verdict = await safety;
@@ -335,6 +369,7 @@ export async function runTurn(
       answer: parsed.answer,
       claims: parsed.claims.map((c) => ({ text: c.text, quote: c.quote, url: c.url, capturedOn: c.readOn, status: c.status })),
       sources,
+      process: { steps, ms: Date.now() - started, searches: queries.length, pages: pagesRead.size },
     });
     await deps.store.addTurn(chat.id, { role: "assistant", text: parsed.answer, at: answeredAt, day, answerId: record.id });
 

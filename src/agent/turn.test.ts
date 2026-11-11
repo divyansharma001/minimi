@@ -108,6 +108,10 @@ test("'has it changed': old sources are re-read and checked in code before the m
   assert.match(research, /O4: "Quillgres Dev costs \$15 per month".*page no longer exists.*Status: cannot-confirm/);
   // The app's status wins over the model's for old claims.
   assert.deepEqual(result.claims.map((c) => c.status), ["changed", "cannot-confirm"]);
+  // The thought process names the day in words and says what the re-check found.
+  const steps = deps.store.answersFor(result.chatId)[0]?.process?.steps.map((s) => s.text) ?? [];
+  assert.match(steps[0] ?? "", /^Found your chat from Tuesday,? \d+ November 2026$/);
+  assert.ok(steps.some((s) => /^Re-checked \d+ old facts: .*changed/.test(s) && !/model/.test(s)), steps.join(" | "));
   assert.equal(result.claims[0]?.url, "https://basalt.example/pricing");
   // [2] is not Basalt's page here: noted, then fixed by one repair round.
   assert.match(result.problems.join(" "), /reports on O2 .* cites a different page/);
@@ -188,6 +192,27 @@ test("the answer and its claims are saved, so the next turn can recall them", as
   assert.deepEqual(answers[0]?.claims[0], {
     text: "Pro is $79", quote: "Pro: $79 / month", url: "https://basalt.example/pricing", capturedOn: "2026-11-11", status: "supported",
   });
+});
+
+test("the steps taken are saved with the answer, as its thought process", async () => {
+  const model = new ScriptedModel([
+    search({ queries: ["Basalt pricing"] }),
+    done,
+    json({ answer: "Pro is $79 [1].", claims: [{ text: "Pro is $79", source: 1, quote: "Pro: $79 / month", status: "supported", oldClaim: null }] }),
+  ]);
+  const live: string[] = [];
+  const result = await runTurn({ message: "How much is Basalt's Pro plan?" }, { ...deps, model }, (e) => live.push(e.text));
+  const process = deps.store.answersFor(result.chatId)[0]?.process;
+  assert.deepEqual(process?.steps.map((s) => s.text), [
+    "Searching: Basalt pricing",
+    "Read 3 pages",
+    "Writing the answer",
+    "Checked 1 fact against its page",
+  ]);
+  assert.deepEqual(live, ["Searching: Basalt pricing", "Read 3 pages", "Writing the answer"], "the last step is saved, not shown live");
+  assert.equal(process?.searches, 1);
+  assert.equal(process?.pages, 3);
+  assert.ok(process.steps.every((s, i, all) => s.ms >= (all[i - 1]?.ms ?? 0)), "steps are in time order");
 });
 
 // ---------- Guardrails ----------

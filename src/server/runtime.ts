@@ -1,12 +1,19 @@
 // Builds the agent's parts once per server process and hands them out.
 //
 // Kept on globalThis so Next.js reloading modules in development does not
-// open a second copy of memory. A setup problem (a missing key) is not kept,
-// so fixing .env and reloading the page works without a restart.
+// open a second copy of memory on every request. A setup problem (a missing
+// key) is not kept, so fixing .env and reloading the page works without a
+// restart.
+//
+// In development, a code change reloads this module. The kept runtime was
+// built by the old code, so it would keep old objects without new methods
+// ("store.deleteChat is not a function"). Each load of this module has its
+// own token, and a runtime built under another token is rebuilt.
 
 import { join } from "node:path";
 import { readConfig, type Config } from "../config/env.ts";
 import { MemoryStore } from "../memory/store.ts";
+import { seedDemoChats } from "../memory/demo.ts";
 import { OpenRouterClient } from "../model/openrouter.ts";
 import { SnapshotStore } from "../search/snapshots.ts";
 import { TavilyBackend } from "../search/tavily.ts";
@@ -25,7 +32,8 @@ export type Runtime =
     }
   | { ok: false; problems: string[] };
 
-const holder = globalThis as unknown as { __minimiRuntime?: Promise<Runtime> };
+const BUILD = Symbol("minimi runtime");
+const holder = globalThis as unknown as { __minimiRuntime?: { build: symbol; runtime: Promise<Runtime> } };
 
 async function build(): Promise<Runtime> {
   const result = readConfig(process.env);
@@ -34,6 +42,15 @@ async function build(): Promise<Runtime> {
 
   const root = process.env.MEMORY_DIR ?? join(process.cwd(), "memory");
   const { store, warnings } = await MemoryStore.open(root);
+  // A fresh copy gets the demo chats from demo/, once. Dates are read in this
+  // computer's time zone: the app runs on the user's own machine.
+  const demo = await seedDemoChats({
+    demoDir: join(process.cwd(), "demo"),
+    memoryDir: root,
+    store,
+    now: new Date(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
   const pages = await SnapshotStore.open(join(root, "pages"));
   const now = () => new Date();
 
@@ -55,12 +72,12 @@ async function build(): Promise<Runtime> {
     };
   };
 
-  return { ok: true, config, store, deps, warnings: [...warnings, ...pages.warnings] };
+  return { ok: true, config, store, deps, warnings: [...warnings, ...demo.warnings, ...pages.warnings] };
 }
 
 export async function getRuntime(): Promise<Runtime> {
-  holder.__minimiRuntime ??= build();
-  const runtime = await holder.__minimiRuntime;
+  if (holder.__minimiRuntime?.build !== BUILD) holder.__minimiRuntime = { build: BUILD, runtime: build() };
+  const runtime = await holder.__minimiRuntime.runtime;
   if (!runtime.ok) holder.__minimiRuntime = undefined;
   return runtime;
 }

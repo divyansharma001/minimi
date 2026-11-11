@@ -67,4 +67,14 @@ export type AnswerRecord = {
   answer: string;
   claims: StoredClaim[];
   sources?: SourceRecord[];
+  /** What the agent did to reach the answer, shown as its thought process. */
+  process?: AnswerProcess;
+};
+
+export type AnswerProcess = {
+  /** Each step, with milliseconds since the message arrived. */
+  steps: { text: string; ms: number }[];
+  ms: number;
+  searches: number;
+  pages: number;
 };

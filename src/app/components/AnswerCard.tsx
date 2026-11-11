@@ -3,8 +3,9 @@
 import { ArrowRightLeft, Check, ChevronDown, CircleHelp, ExternalLink, Undo2 } from "lucide-react";
 import type { ClaimStatus } from "@/memory/types.ts";
 import type { ClaimView, MessageView, SourceView } from "../view.ts";
-import { Markdown } from "./Markdown.tsx";
+import { CiteLink, Markdown } from "./Markdown.tsx";
 import { shortDay } from "./dates.ts";
+import { ThoughtProcess } from "./ThoughtProcess.tsx";
 
 const STATUS: Record<ClaimStatus, { label: string; tone: string; Icon: typeof Check }> = {
   supported: { label: "Checked", tone: "pill-checked", Icon: Check },
@@ -52,17 +53,13 @@ function withValues(text: string) {
   );
 }
 
-function Fact({ claim, anchor, index, page }: { claim: ClaimView; anchor: string; index: number; page?: number }) {
+function Fact({ claim, index, page, source }: { claim: ClaimView; index: number; page?: number; source?: SourceView }) {
   return (
     <li className="fact" style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}>
       <div className="fact-text">{withValues(claim.text)}</div>
       {claim.site && (
         <div className="fact-meta">
-            {page !== undefined && (
-              <a className="cite" href={`#${anchor}-${page}`} aria-label={`Source ${page}`}>
-                {page}
-              </a>
-            )}
+          {page !== undefined && <CiteLink n={page} source={source} />}
           <span>{claim.site}</span>
           <span aria-hidden="true">·</span>
           <span>read {shortDay(claim.readOn)}</span>
@@ -118,7 +115,8 @@ export function AnswerCard({ message }: { message: MessageView }) {
   const { pages, pageOfUrl, pageOf } = byPage(message.answer?.sources ?? []);
   return (
     <article className="card" aria-label="Answer">
-      <Markdown text={message.text} anchor={anchor} pageOf={pageOf} />
+      {message.answer?.process && <ThoughtProcess process={message.answer.process} />}
+      <Markdown text={message.text} pages={pages} pageOf={pageOf} />
       {claims.length > 0 && (
         <details className="facts-box">
           <summary>
@@ -136,7 +134,13 @@ export function AnswerCard({ message }: { message: MessageView }) {
           </summary>
           <ul className="facts">
             {claims.map((claim, i) => (
-              <Fact claim={claim} anchor={anchor} index={i} page={pageOfUrl.get(claim.url)} key={`${claim.text}-${i}`} />
+              <Fact
+                claim={claim}
+                index={i}
+                page={pageOfUrl.get(claim.url)}
+                source={pages[(pageOfUrl.get(claim.url) ?? 0) - 1]}
+                key={`${claim.text}-${i}`}
+              />
             ))}
           </ul>
         </details>

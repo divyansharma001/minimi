@@ -1,7 +1,7 @@
 // What the server sends to the chat screen. Plain data, safe to send to a
 // browser: no quotes from pages beyond what the answer shows, no keys, no paths.
 
-import type { ClaimStatus } from "@/memory/types.ts";
+import type { AnswerProcess, ClaimStatus } from "@/memory/types.ts";
 
 export type ChatSummary = {
   id: string;
@@ -36,6 +36,8 @@ export type AnswerView = {
   sources: SourceView[];
   /** True when the safety check stopped the answer. */
   refused: boolean;
+  /** The steps taken, for the thought process. Missing on older answers. */
+  process?: AnswerProcess;
 };
 
 export type MessageView = {

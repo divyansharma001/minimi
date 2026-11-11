@@ -35,7 +35,8 @@ export function longDate(now: Date, timeZone: string): string {
   return now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone });
 }
 
-const dayName = (day: string) =>
+/** "Tuesday 3 November 2026" from "2026-11-03". */
+export const dayName = (day: string) =>
   new Date(`${day}T00:00:00Z`).toLocaleDateString("en-GB", {
     weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC",
   });

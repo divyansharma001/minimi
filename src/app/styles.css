@@ -901,6 +901,105 @@ button {
   color: var(--white);
 }
 
+/* ---------- Thought process: a quiet line above the answer ---------- */
+
+.process {
+  margin: -6px 0 14px;
+}
+
+.process summary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin-left: -10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-lg);
+  list-style: none;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background var(--normal) var(--ease);
+}
+
+.process summary::-webkit-details-marker {
+  display: none;
+}
+
+.process summary:hover {
+  background: var(--surface-2);
+}
+
+.process-title {
+  font-weight: 500;
+  color: var(--text-2);
+}
+
+.process-meta {
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.process-chevron {
+  color: var(--text-3);
+  transform: rotate(-90deg);
+  transition: transform var(--normal) var(--ease);
+}
+
+.process[open] .process-chevron {
+  transform: none;
+}
+
+/* A thin timeline: a dot per step, joined by a line. */
+.process-steps {
+  margin: 4px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.process-steps li {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 0 5px 22px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.process-steps li::before {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-full);
+  background: var(--g-300);
+}
+
+.process-steps li:last-child::before {
+  background: var(--g-700);
+}
+
+.process-steps li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 21px;
+  bottom: -9px;
+  left: 6px;
+  width: 1px;
+  background: var(--stroke);
+}
+
+.step-time {
+  flex: none;
+  font-size: 13px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---------- Checked facts (the reference card's rows) ---------- */
 
 /* Closed by default. The closed row still shows each status's count, so a

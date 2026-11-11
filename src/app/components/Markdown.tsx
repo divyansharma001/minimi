@@ -3,10 +3,11 @@
 // Renders an answer's Markdown safely.
 // - Raw HTML in the text is dropped (skipHtml), never rendered.
 // - Links are only followed when they are http(s); anything else is removed.
-// - [n] citation markers become small chips that jump to source n below.
+// - [n] citation markers become small chips that open source n.
 
 import ReactMarkdown, { defaultUrlTransform, type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import type { SourceView } from "../view.ts";
 
 const CITE = "cite:";
 
@@ -29,18 +30,47 @@ function urlTransform(url: string): string {
   return /^https?:\/\//i.test(safe) ? safe : "";
 }
 
-type Props = { text: string; anchor: string; pageOf: (n: number) => number | undefined };
+/**
+ * A numbered source chip. It opens the page itself in a new tab, as a reader
+ * expects, and names the site and page on hover. Without a usable link it
+ * stays a plain number.
+ */
+export function CiteLink({ n, source }: { n: number; source: SourceView | undefined }) {
+  if (!source || !/^https?:\/\//i.test(source.url)) {
+    return (
+      <span className="cite" aria-label={`Source ${n}`}>
+        {n}
+      </span>
+    );
+  }
+  const name = source.title || source.site;
+  return (
+    <a
+      className="cite"
+      href={source.url}
+      target="_blank"
+      rel="noopener noreferrer nofollow"
+      title={`${source.site} · ${name}`}
+      aria-label={`Source ${n}: ${name}, opens in a new tab`}
+    >
+      {n}
+    </a>
+  );
+}
 
-export function Markdown({ text, anchor, pageOf }: Props) {
+type Props = {
+  text: string;
+  /** Sources numbered by page: page n is pages[n - 1]. */
+  pages: SourceView[];
+  pageOf: (n: number) => number | undefined;
+};
+
+export function Markdown({ text, pages, pageOf }: Props) {
   const components: Components = {
     a({ href, children }) {
       if (href?.startsWith(CITE)) {
-        const n = href.slice(CITE.length);
-        return (
-          <a className="cite" href={`#${anchor}-${n}`} aria-label={`Source ${n}`}>
-            {n}
-          </a>
-        );
+        const n = Number(href.slice(CITE.length));
+        return <CiteLink n={n} source={pages[n - 1]} />;
       }
       if (!href) return <>{children}</>;
       return (
