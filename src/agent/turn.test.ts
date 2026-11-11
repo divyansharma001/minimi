@@ -85,16 +85,16 @@ test("no past chat found: the brief tells the model to say so, not guess", async
 });
 
 test("'has it changed': old sources are re-read and checked in code before the model is asked", async () => {
-  const model = new ScriptedModel([
-    done,
+  const draft = (source: number) =>
     json({
-      answer: "Basalt Pro went from $69 to $79 [2].",
+      answer: `Basalt Pro went from $69 to $79 [${source}].`,
       claims: [
-        { text: "Basalt Pro is now $79 a month", source: 2, quote: "Pro: $79 / month", status: "same", oldClaim: "O2" },
+        { text: "Basalt Pro is now $79 a month", source, quote: "Pro: $79 / month", status: "same", oldClaim: "O2" },
         { text: "Quillgres could not be confirmed", source: null, quote: "", status: "supported", oldClaim: "O4" },
       ],
-    }),
-  ]);
+    });
+  // The first draft cites the wrong page; the check sends it back once.
+  const model = new ScriptedModel([done, draft(2), done, draft(1)]);
   const result = await runTurn(
     { message: "Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?" },
     { ...deps, model },
@@ -109,8 +109,12 @@ test("'has it changed': old sources are re-read and checked in code before the m
   // The app's status wins over the model's for old claims.
   assert.deepEqual(result.claims.map((c) => c.status), ["changed", "cannot-confirm"]);
   assert.equal(result.claims[0]?.url, "https://basalt.example/pricing");
-  // [2] is not Basalt's page here, so the mismatch is noted for the checks.
+  // [2] is not Basalt's page here: noted, then fixed by one repair round.
   assert.match(result.problems.join(" "), /reports on O2 .* cites a different page/);
+  assert.equal(result.checks.repairRounds, 1);
+  assert.equal(result.checks.dropped, 0);
+  assert.match(result.problems.join(" "), /Repair round 1: "Basalt Pro is now \$79 a month" \(its quote is not on the page it cites, \[2\]\)/);
+  assert.match(text(model.requests[3] as ModelRequest), /Your last draft failed these checks[\s\S]*its quote is not on the page it cites, \[2\]/);
 });
 
 test("the research prompt gives today's date and forbids years from memory", async () => {
@@ -233,4 +237,35 @@ test("a pasted secret never reaches the model or memory, and the user is told", 
   const saved = JSON.stringify(deps.store.getChat(result.chatId));
   assert.ok(!saved.includes(key), "memory never stored the key");
   assert.match(saved, /\[removed API key\]/);
+});
+
+// ---------- Claim checks ----------
+
+test("a claim that never verifies is dropped after 2 repair rounds, and the rest are kept", async () => {
+  const draft = json({
+    answer: "Pro is $79 [1], and it has a 30-day trial [1].",
+    claims: [
+      { text: "Basalt Pro is $79 a month", source: 1, quote: "Pro: $79 / month", status: "supported", oldClaim: null },
+      { text: "Basalt has a 30-day free trial", source: 1, quote: "30-day free trial", status: "supported", oldClaim: null },
+    ],
+  });
+  const model = new ScriptedModel([search({ queries: ["Basalt pricing"] }), done, draft, done, draft, done, draft]);
+  const result = await runTurn({ message: "How much is Basalt's Pro plan?" }, { ...deps, model });
+  assert.equal(result.checks.repairRounds, 2);
+  assert.equal(result.checks.dropped, 1);
+  assert.deepEqual(result.claims.map((c) => c.text), ["Basalt Pro is $79 a month"]);
+  assert.match(result.problems.join(" "), /Dropped a claim that failed its check: "Basalt has a 30-day free trial"/);
+  // The dropped claim is not saved as something we said.
+  assert.equal(deps.store.answersFor(result.chatId)[0]?.claims.length, 1);
+});
+
+test("a claim with no problems needs no repair round", async () => {
+  const model = new ScriptedModel([
+    search({ queries: ["Basalt pricing"] }),
+    done,
+    json({ answer: "Pro is $79 [1].", claims: [{ text: "Basalt Pro is $79 a month", source: 1, quote: "Pro: $79 / month", status: "supported", oldClaim: null }] }),
+  ]);
+  const result = await runTurn({ message: "How much is Basalt's Pro plan?" }, { ...deps, model });
+  assert.deepEqual(result.checks, { claims: 1, repairRounds: 0, dropped: 0 });
+  assert.equal(model.requests.length, 3);
 });

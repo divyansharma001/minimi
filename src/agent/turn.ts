@@ -23,6 +23,7 @@ import { LIMITS, webSearch, type Evidence, type PageReport, type WebSearchDeps, 
 import type { Trace } from "../eval/types.ts";
 import { parseAnswer, type FinalClaim } from "./answer.ts";
 import { checkOldClaims, type OldClaimCheck } from "./claim-checks.ts";
+import { checkClaims } from "./verify.ts";
 import { choosePath, type Path } from "./intent.ts";
 import { checkInput, REFUSAL, SUPPORT_REPLY, type SafetyVerdict } from "../guardrails/input-safety.ts";
 import { redactSecrets } from "../guardrails/redact.ts";
@@ -41,6 +42,7 @@ export const TURN_LIMITS = {
   toolCallsPerRound: 6,
   queriesPerTurn: 10,
   historyTurns: 10,
+  repairRounds: 2,
 } as const;
 
 export type TurnDeps = {
@@ -63,6 +65,8 @@ export type TurnResult = {
   evidence: Evidence[];
   trace: Trace;
   usage: Usage & { modelCalls: number };
+  /** How the claim checks went: claims shown, repair rounds run, claims dropped. */
+  checks: { claims: number; repairRounds: number; dropped: number };
   safety: SafetyVerdict;
   problems: string[];
 };
@@ -102,6 +106,8 @@ export async function runTurn(
     if (verdict.action === "refuse" || verdict.action === "support") throw new Refused(verdict);
   };
   const usage = { inputTokens: 0, outputTokens: 0, cost: 0, modelCalls: 0 };
+  const checks = { claims: 0, repairRounds: 0, dropped: 0 };
+  let checkFailures: string[] = [];
   const problems: string[] = [];
   const count = (u: Usage) => {
     usage.inputTokens += u.inputTokens;
@@ -168,22 +174,17 @@ export async function runTurn(
 
   const brief = (): Brief => ({
     now, timeZone: deps.timeZone, dates: recalled.dates, recall: recalled, history,
-    oldChecks, evidence, unreadable, message, notices,
+    oldChecks, evidence, unreadable, message, notices, checkFailures,
   });
 
   try {
-    // 4. Research: the model decides what else to search.
-    if (path === "research") {
-      const messages: ChatMessage[] = [
-        { role: "system", content: researchSystemPrompt(brief(), TURN_LIMITS.queriesPerTurn) },
-        ...history.map((t): ChatMessage => ({ role: t.role, content: t.text })),
-        { role: "user", content: message },
-      ];
-      for (let round = 0; round < TURN_LIMITS.researchRounds; round += 1) {
+    // 4. Research: the model decides what to search, a round at a time.
+    const research = async (messages: ChatMessage[], rounds: number) => {
+      for (let round = 0; round < rounds; round += 1) {
         const reply = await deps.model.complete({ messages, tools: [WEB_SEARCH_TOOL], effort: "low", maxTokens: 1_500 });
         count(reply.usage);
         const calls = reply.toolCalls.slice(0, TURN_LIMITS.toolCallsPerRound);
-        if (calls.length === 0) break;
+        if (calls.length === 0) return;
         await mustBeSafe();
         messages.push({
           role: "assistant",
@@ -227,31 +228,75 @@ export async function runTurn(
         );
         calls.forEach((call, i) => messages.push({ role: "tool", tool_call_id: call.id, content: outputs[i] ?? "" }));
       }
-    }
+    };
+    const researchMessages = (userContent: string): ChatMessage[] => [
+      { role: "system", content: researchSystemPrompt(brief(), TURN_LIMITS.queriesPerTurn) },
+      ...history.map((t): ChatMessage => ({ role: t.role, content: t.text })),
+      { role: "user", content: userContent },
+    ];
+    if (path === "research") await research(researchMessages(message), TURN_LIMITS.researchRounds);
 
     // 5. Write. On the research path the safety check has almost always
     // finished by now, so waiting for it costs nothing and a refused message
     // skips the writer. Short paths run the writer alongside it instead.
     if (path === "research") await mustBeSafe();
+    const write = async () => {
+      const writerMessages: ChatMessage[] = [
+        { role: "system", content: writerSystemPrompt(brief()) },
+        { role: "user", content: writerBrief(brief()) },
+      ];
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const reply = await deps.model.complete({
+          messages: writerMessages,
+          jsonSchema: { name: "answer", schema: ANSWER_SCHEMA as unknown as Record<string, unknown> },
+          effort: "medium",
+          maxTokens: 4_000,
+        });
+        count(reply.usage);
+        const result = parseAnswer(reply.content, evidence, oldChecks, day);
+        if (result) {
+          problems.push(...result.problems);
+          return result;
+        }
+        problems.push("The model's answer was not valid JSON, so it was asked again.");
+      }
+      throw new ModelError("bad-reply", "The model did not return a usable answer.");
+    };
     onEvent({ type: "status", text: "Writing the answer" });
-    const writerMessages: ChatMessage[] = [
-      { role: "system", content: writerSystemPrompt(brief()) },
-      { role: "user", content: writerBrief(brief()) },
-    ];
-    let parsed = null;
-    for (let attempt = 0; attempt < 2 && !parsed; attempt += 1) {
-      const reply = await deps.model.complete({
-        messages: writerMessages,
-        jsonSchema: { name: "answer", schema: ANSWER_SCHEMA as unknown as Record<string, unknown> },
-        effort: "medium",
-        maxTokens: 4_000,
-      });
-      count(reply.usage);
-      parsed = parseAnswer(reply.content, evidence, oldChecks, day);
-      if (!parsed) problems.push("The model's answer was not valid JSON, so it was asked again.");
+    let parsed = await write();
+
+    // 6. Check every claim in code. Failures get up to 2 repair rounds: search
+    // for what is missing, then rewrite. Whatever still fails a hard check is
+    // dropped from the claims and recorded.
+    const pageText = (item: Evidence) =>
+      (item.snapshotId ? deps.search.snapshots.get(item.snapshotId)?.markdown : undefined) ?? item.text;
+    let claimProblems = checkClaims(parsed.claims, evidence, oldChecks, pageText, day);
+    for (let round = 0; round < TURN_LIMITS.repairRounds && claimProblems.length > 0; round += 1) {
+      checks.repairRounds += 1;
+      problems.push(
+        `Repair round ${checks.repairRounds}: ${claimProblems.map((p) => `"${p.claim.text}" (${p.reason})`).join("; ")}.`,
+      );
+      onEvent({ type: "status", text: `Checking: ${claimProblems.length} claim${claimProblems.length === 1 ? "" : "s"} need another look` });
+      const hard = claimProblems.filter((p) => p.kind === "hard");
+      if (path === "research" && hard.length > 0) {
+        const list = hard.map((p) => `- "${p.claim.text}": ${p.reason}`).join("\n");
+        await research(
+          researchMessages(
+            `${message}\n\nThe app could not verify these statements against the evidence:\n${list}\nSearch for evidence that settles them, or reply DONE if the evidence already does or none can exist.`,
+          ),
+          1,
+        );
+      }
+      checkFailures = claimProblems.map((p) => `"${p.claim.text}": ${p.reason}.`);
+      parsed = await write();
+      claimProblems = checkClaims(parsed.claims, evidence, oldChecks, pageText, day);
     }
-    if (!parsed) throw new ModelError("bad-reply", "The model did not return a usable answer.");
-    problems.push(...parsed.problems);
+    const dropped = claimProblems.filter((p) => p.kind === "hard").map((p) => p.claim);
+    for (const claim of dropped) problems.push(`Dropped a claim that failed its check: "${claim.text}".`);
+    parsed = { ...parsed, claims: parsed.claims.filter((c) => !dropped.includes(c)) };
+    checks.dropped = dropped.length;
+    checks.claims = parsed.claims.length;
+
     await mustBeSafe();
     const verdict = await safety;
     if (verdict.action === "unchecked") problems.push(`The safety check was skipped: ${verdict.reason}.`);
@@ -275,6 +320,7 @@ export async function runTurn(
       claims: parsed.claims,
       evidence,
       usage,
+      checks,
       safety: verdict,
       problems,
       trace: {
@@ -304,6 +350,7 @@ export async function runTurn(
       claims: [],
       evidence: refused ? [] : evidence,
       usage,
+      checks,
       safety: refused ?? (await safety),
       problems: refused ? problems : [...problems, reason],
       trace: {

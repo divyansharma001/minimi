@@ -83,7 +83,9 @@ for (const { testCase, result, score } of runs) {
   console.log(
     `${mark}  ${pad(testCase.id, 32)} ${String(score.passed).padStart(2)}/${String(score.total).padEnd(2)}  ` +
       `${(result.trace.timings.totalMs / 1000).toFixed(1).padStart(5)}s  $${result.usage.cost.toFixed(4)}  ` +
-      `${result.usage.modelCalls} calls  ${result.trace.searchQueries.length} queries  ${result.trace.pagesRead.length} pages  [${result.trace.refused ? "refused" : result.path}]`,
+      `${result.usage.modelCalls} calls  ${result.trace.searchQueries.length} queries  ${result.trace.pagesRead.length} pages  ` +
+      `claims ${result.checks.claims}${result.checks.repairRounds ? `, ${result.checks.repairRounds} repair` : ""}${result.checks.dropped ? `, ${result.checks.dropped} dropped` : ""}  ` +
+      `[${result.trace.refused ? "refused" : result.path}]`,
   );
   for (const check of score.checks.filter((c) => !c.pass)) console.log(`        x ${check.name}${check.detail ? `: ${check.detail}` : ""}`);
   for (const problem of result.problems) console.log(`        ! ${problem}`);
@@ -95,11 +97,15 @@ const fullCases = runs.filter((r) => r.score.passed === r.score.total).length;
 const cost = runs.reduce((n, r) => n + r.result.usage.cost, 0);
 const times = runs.map((r) => r.result.trace.timings.totalMs).sort((a, b) => a - b);
 const median = times[Math.floor(times.length / 2)] ?? 0;
+const claimsShown = runs.reduce((n, r) => n + r.result.checks.claims, 0);
+const repaired = runs.filter((r) => r.result.checks.repairRounds > 0).length;
+const dropped = runs.reduce((n, r) => n + r.result.checks.dropped, 0);
 
 console.log(
   `\nCases fully passed: ${fullCases}/${runs.length}   Checks passed: ${passedChecks}/${checks}` +
     `   Median time: ${(median / 1000).toFixed(1)}s   Total cost: $${cost.toFixed(4)}   Wall time: ${((Date.now() - started) / 1000).toFixed(0)}s`,
 );
+console.log(`Claims shown: ${claimsShown}   Answers needing repair: ${repaired}/${runs.length}   Claims dropped: ${dropped}`);
 
 await mkdir("eval-results", { recursive: true });
 const file = join("eval-results", `${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
@@ -109,7 +115,7 @@ await writeFile(
     {
       model: config.config.model,
       ranAt: new Date().toISOString(),
-      summary: { fullCases, cases: runs.length, passedChecks, checks, medianMs: median, cost },
+      summary: { fullCases, cases: runs.length, passedChecks, checks, medianMs: median, cost, claimsShown, repaired, dropped },
       runs: runs.map(({ testCase, result, score }) => ({
         id: testCase.id,
         score,
@@ -118,6 +124,7 @@ await writeFile(
         claims: result.claims,
         trace: result.trace,
         usage: result.usage,
+        checks: result.checks,
         problems: result.problems,
       })),
     },

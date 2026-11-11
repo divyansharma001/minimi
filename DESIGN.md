@@ -38,7 +38,7 @@ So the agent can catch its own past mistakes: "On 3 Nov I told you $19, but the 
 |---|---|
 | Input | Llama Guard 4 checks every message, alongside the first steps, so it adds no wait. Harmful requests are refused before the web is touched; self-harm gets a caring reply with where to find help; medical, legal and money questions are answered. Keys, passwords and card numbers are removed before any model or file sees them. |
 | Web | Only public addresses, checked at connect time and after every redirect. Links the model makes up cannot carry query strings. Pages are capped at 3 MB, 10 seconds and text only. Hidden text, and text written to an AI, is cut before the model sees a page. |
-| Output | Answers are JSON checked again in code. Claims citing evidence that does not exist are dropped. Code, not the model, decides an old claim's status. |
+| Output | Answers are JSON checked again in code. Every quote must be on its saved page, and every number in a claim must be in its quote. The official site is cited over copies of it. A failed claim gets up to 2 repair rounds, then is dropped. Code, not the model, decides an old claim's status. |
 | Spend | Per message: at most 10 searches, 3 research rounds and a model price cap. Per day: `DAILY_SEARCH_LIMIT` and `DAILY_MODEL_SPEND_USD`. No provider that keeps prompts for training. |
 
 If the safety model is down, the agent still answers and logs it: one provider's outage should not stop the agent, and the main model has its own safety.

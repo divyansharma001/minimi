@@ -27,6 +27,8 @@ export type Brief = {
   message: string;
   /** Things the app did that the user should hear about. */
   notices: string[];
+  /** Claims from the last draft that failed the app's checks. */
+  checkFailures: string[];
 };
 
 export function longDate(now: Date, timeZone: string): string {
@@ -189,14 +191,15 @@ export function writerSystemPrompt(brief: Brief): string {
       `- If the app noted an assumption about a date, tell the user.`,
       `- Old claims (O1, O2, ...) come with a status the app worked out. Keep it. For "changed", give the old and the new value with both dates: the old answer was right when given, so do not call it wrong. For "was-wrong", say plainly that your earlier answer was wrong.`,
     ].join("\n"),
+    `Sources: when a company's own site is in the evidence and states the fact, cite it rather than a site that copies it.`,
     `Style: plain words, short, answer first. Use bullets or a small table to compare. Cite every fact with [n].`,
     [
       `Reply as JSON:`,
       `- answer: the reply in Markdown, with [n] citations.`,
       `- claims: one entry per fact from the evidence that the answer states, and one per old claim it reports on.`,
-      `  - text: the fact, in one sentence.`,
+      `  - text: one fact, in one sentence. Two facts from different lines of a page are two claims.`,
       `  - source: the evidence number it rests on. null only for cannot-confirm, or was-wrong with no new evidence.`,
-      `  - quote: the words from that evidence that support it, copied exactly. Empty when source is null.`,
+      `  - quote: the words from that evidence that support it, copied exactly. Every number in text must appear in quote. Empty when source is null.`,
       `  - status: supported (a new fact), same, changed, was-wrong, or cannot-confirm.`,
       `  - oldClaim: "O1" etc. when it reports on an old claim, otherwise null.`,
       `Small talk or a memory-only question may have no claims.`,
@@ -217,6 +220,9 @@ export function writerBrief(brief: Brief): string {
     evidenceSection(brief.evidence),
     unreadableSection(brief.unreadable),
     brief.notices.length ? `## Notes from the app\n${brief.notices.map((n) => `- ${n}`).join("\n")}` : "",
+    brief.checkFailures.length
+      ? `## Your last draft failed these checks\nFix each one from the evidence: quote the exact words from the page you cite, and use only numbers that are in your quote. If the evidence cannot support it, leave it out or say you could not confirm it.\n${brief.checkFailures.map((f) => `- ${f}`).join("\n")}`
+      : "",
     `## The user's message\n${brief.message}`,
   );
 }
