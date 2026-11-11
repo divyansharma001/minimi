@@ -33,6 +33,7 @@ test("sends the routing rules that protect cost, privacy and the JSON schema", a
     require_parameters: true,
     data_collection: "deny",
     max_price: { prompt: 0.5, completion: 2 },
+    preferred_min_throughput: 150,
   });
   assert.deepEqual(body.response_format, {
     type: "json_schema",
@@ -105,4 +106,17 @@ test("a reply cut off by the token cap says so", async () => {
   const { fetchImpl } = fakeRouter([reply({ content: '{"answer": "Neon' }, { choices: [{ message: { content: '{"answer": "Neon' }, finish_reason: "length" }] })]);
   const result = await new OpenRouterClient("k", "m", { fetchImpl }).complete({ messages: [] });
   assert.equal(result.finishReason, "length");
+});
+
+test("a call's own time limit wins over the default", async () => {
+  const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener("abort", () => reject(Object.assign(new Error("timed out"), { name: "TimeoutError" })));
+    })) as typeof fetch;
+  const started = Date.now();
+  await assert.rejects(
+    new OpenRouterClient("k", "m", { fetchImpl, timeoutMs: 60_000 }).complete({ messages: [], timeoutMs: 50 }),
+    (e: unknown) => e instanceof ModelError && e.reason === "timeout" && /0.05 seconds/.test(e.message),
+  );
+  assert.ok(Date.now() - started < 5_000);
 });

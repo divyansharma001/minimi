@@ -21,7 +21,7 @@ import { LinkGate } from "../search/link-gate.ts";
 import type { Snapshot } from "../search/snapshots.ts";
 import { LIMITS, webSearch, type Evidence, type PageReport, type WebSearchDeps, type WebSearchInput } from "../search/tool.ts";
 import type { Trace } from "../eval/types.ts";
-import { parseAnswer, type FinalClaim } from "./answer.ts";
+import { parseAnswer, type FinalClaim, type ParsedAnswer } from "./answer.ts";
 import { checkOldClaims, type OldClaimCheck } from "./claim-checks.ts";
 import { checkClaims, type ClaimProblem } from "./verify.ts";
 import { checkConflictsShown, findConflicts, withConflicts } from "./conflicts.ts";
@@ -36,6 +36,7 @@ import {
   writerBrief,
   writerSystemPrompt,
   type Brief, dayName } from "./prompts.ts";
+import { applyRepair, REPAIR_SCHEMA, repairMessages } from "./repair.ts";
 
 export const TURN_LIMITS = {
   researchRounds: 3,
@@ -43,6 +44,11 @@ export const TURN_LIMITS = {
   queriesPerTurn: 10,
   historyTurns: 10,
   repairRounds: 2,
+  /** After this long, no new research or repair rounds start: the turn finishes with what it has. */
+  softDeadlineMs: 75_000,
+  /** Time limits per call: research replies are small, so a stall shows fast. */
+  researchCallMs: 30_000,
+  repairCallMs: 45_000,
 } as const;
 
 export type TurnDeps = {
@@ -107,6 +113,7 @@ export async function runTurn(
   const note = (text: string) => {
     if (steps.at(-1)?.text !== text) steps.push({ text, ms: Date.now() - started });
   };
+  const pastDeadline = () => Date.now() - started > TURN_LIMITS.softDeadlineMs;
   const onEvent = (event: TurnEvent) => {
     note(event.text);
     report(event);
@@ -209,7 +216,14 @@ export async function runTurn(
     // 4. Research: the model decides what to search, a round at a time.
     const research = async (messages: ChatMessage[], rounds: number) => {
       for (let round = 0; round < rounds; round += 1) {
-        const reply = await deps.model.complete({ messages, tools: [WEB_SEARCH_TOOL], effort: "low", maxTokens: 1_500 });
+        if (pastDeadline()) return;
+        const reply = await deps.model.complete({
+          messages,
+          tools: [WEB_SEARCH_TOOL],
+          effort: "low",
+          maxTokens: 1_500,
+          timeoutMs: TURN_LIMITS.researchCallMs,
+        });
         count(reply.usage);
         const calls = reply.toolCalls.slice(0, TURN_LIMITS.toolCallsPerRound);
         if (calls.length === 0) return;
@@ -287,6 +301,9 @@ export async function runTurn(
         const reply = await deps.model.complete({
           messages: writerMessages,
           jsonSchema: { name: "answer", schema: ANSWER_SCHEMA as unknown as Record<string, unknown> },
+          // Measured on one real 5-tool request: "medium" thought for about
+          // 2,000 to 2,600 tokens; "high" (the model's default) for 9,000+,
+          // taking up to 98 s; "low" swung from 1,300 to 12,000 by provider.
           effort: "medium",
           maxTokens,
         });
@@ -304,6 +321,34 @@ export async function runTurn(
       }
       throw new ModelError("bad-reply", "The model did not return a usable answer.");
     };
+    // A repair round sends back only the changes. If they cannot be applied
+    // safely, or the call fails, the answer is written again in full.
+    const repair = async (draft: ParsedAnswer): Promise<ParsedAnswer> => {
+      try {
+        const reply = await deps.model.complete({
+          messages: repairMessages(brief(), writerBrief(brief()), draft),
+          jsonSchema: { name: "repair", schema: REPAIR_SCHEMA as unknown as Record<string, unknown> },
+          // No thinking: exact small edits do not need it, and code checks
+          // every repaired fact again. Measured on a live repair: 2 s with
+          // thinking off, 10 to 14 s on "low", with the same edits applying.
+          effort: "none",
+          maxTokens: 6_000,
+          timeoutMs: TURN_LIMITS.repairCallMs,
+        });
+        count(reply.usage);
+        const result = applyRepair(draft, reply.content, evidence, oldChecks, day);
+        if (result) {
+          problems.push(...result.problems);
+          return result;
+        }
+        problems.push("The repair could not be applied exactly, so the answer was written again.");
+      } catch (error) {
+        if (!(error instanceof ModelError)) throw error;
+        problems.push(`The repair call failed (${error.message}), so the answer was written again.`);
+      }
+      return write();
+    };
+
     onEvent({ type: "status", text: "Writing the answer" });
     let parsed = await write();
 
@@ -322,11 +367,15 @@ export async function runTurn(
     };
     let claimProblems = checkAll();
     for (let round = 0; round < TURN_LIMITS.repairRounds && claimProblems.length > 0; round += 1) {
+      if (pastDeadline()) {
+        note("Time limit reached, so facts that still fail are left out");
+        break;
+      }
       checks.repairRounds += 1;
       problems.push(
         `Repair round ${checks.repairRounds}: ${claimProblems.map((p) => `"${p.claim.text}" (${p.reason})`).join("; ")}.`,
       );
-      onEvent({ type: "status", text: `Checking: ${claimProblems.length} claim${claimProblems.length === 1 ? "" : "s"} need another look` });
+      onEvent({ type: "status", text: `Fixing ${claimProblems.length} fact${claimProblems.length === 1 ? "" : "s"} that did not pass the checks` });
       const toSettle = claimProblems.filter((p) => p.kind === "hard" || p.research);
       if (path === "research" && toSettle.length > 0) {
         const list = toSettle.map((p) => `- "${p.claim.text}": ${p.reason}`).join("\n");
@@ -338,7 +387,7 @@ export async function runTurn(
         );
       }
       checkFailures = claimProblems.map((p) => `"${p.claim.text}": ${p.reason}.`);
-      parsed = await write();
+      parsed = await repair(parsed);
       claimProblems = checkAll();
     }
     const dropped = claimProblems.filter((p) => p.kind === "hard").map((p) => p.claim);

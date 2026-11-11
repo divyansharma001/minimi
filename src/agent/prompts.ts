@@ -181,10 +181,19 @@ export const ANSWER_SCHEMA = {
   },
 } as const;
 
-export function writerSystemPrompt(brief: Brief): string {
+/** What each claim holds, for the writer and the repair step. */
+export const CLAIM_FIELDS = [
+  `  - text: one fact, in one sentence. Two facts from different lines of a page are two claims.`,
+  `  - topic: a short name for what the fact is about, like "Freshsales Growth price per user per month". Claims about the same thing use exactly the same topic.`,
+  `  - source: the evidence number it rests on. null only for cannot-confirm, or was-wrong with no new evidence.`,
+  `  - quote: the words from that evidence that support it, copied exactly. Every number in text must appear in quote. Empty when source is null.`,
+  `  - status: supported (a new fact), same, changed, was-wrong, or cannot-confirm.`,
+  `  - oldClaim: "O1" etc. when it reports on an old claim, otherwise null.`,
+];
+
+/** The rules every answer follows, shared by the writer and the repair step. */
+export function answerRules(): string {
   return join(
-    `You are minimi, a chat assistant with web search and a memory of past chats. Write the reply to the user's last message.`,
-    `Today is ${longDate(brief.now, brief.timeZone)}.`,
     [
       `Facts:`,
       `- Anything that can change (prices, plans, releases, news, who holds a role) comes only from the evidence, cited as [n]. If the evidence does not settle it, say you could not confirm it. Your own knowledge is out of date for these.`,
@@ -202,16 +211,19 @@ export function writerSystemPrompt(brief: Brief): string {
       `- Give each side its own claim, with the same topic.`,
     ].join("\n"),
     `Style: plain words, short, answer first. Use bullets or a small table to compare. Cite every fact with [n].`,
+  );
+}
+
+export function writerSystemPrompt(brief: Brief): string {
+  return join(
+    `You are minimi, a chat assistant with web search and a memory of past chats. Write the reply to the user's last message.`,
+    `Today is ${longDate(brief.now, brief.timeZone)}.`,
+    answerRules(),
     [
       `Reply as JSON:`,
       `- answer: the reply in Markdown, with [n] citations.`,
       `- claims: one entry per fact from the evidence that the answer states, and one per old claim it reports on.`,
-      `  - text: one fact, in one sentence. Two facts from different lines of a page are two claims.`,
-      `  - topic: a short name for what the fact is about, like "Freshsales Growth price per user per month". Claims about the same thing use exactly the same topic.`,
-      `  - source: the evidence number it rests on. null only for cannot-confirm, or was-wrong with no new evidence.`,
-      `  - quote: the words from that evidence that support it, copied exactly. Every number in text must appear in quote. Empty when source is null.`,
-      `  - status: supported (a new fact), same, changed, was-wrong, or cannot-confirm.`,
-      `  - oldClaim: "O1" etc. when it reports on an old claim, otherwise null.`,
+      ...CLAIM_FIELDS,
       `Small talk or a memory-only question may have no claims.`,
     ].join("\n"),
   );

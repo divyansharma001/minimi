@@ -24,8 +24,10 @@ export type ModelRequest = {
   /** Forces the reply to be JSON matching this schema. Not used with tools. */
   jsonSchema?: { name: string; schema: Record<string, unknown> };
   maxTokens?: number;
-  /** How hard the model thinks before replying. */
-  effort?: "low" | "medium" | "high";
+  /** How hard the model thinks before replying. "none" turns thinking off. */
+  effort?: "none" | "low" | "medium" | "high";
+  /** Gives up after this long. Small calls get short limits, so a stalled provider cannot hold a turn for minutes. */
+  timeoutMs?: number;
 };
 
 export type Usage = { inputTokens: number; outputTokens: number; cost: number };

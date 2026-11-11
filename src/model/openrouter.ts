@@ -36,6 +36,9 @@ type RawReply = {
   error?: { message?: string };
 };
 
+/** Tokens a second below which a provider is tried last. */
+const MIN_TOKENS_PER_SECOND = 150;
+
 export class OpenRouterClient implements ModelClient {
   private readonly apiKey: string;
   private readonly model: string;
@@ -66,11 +69,19 @@ export class OpenRouterClient implements ModelClient {
         : {}),
       ...(request.maxTokens ? { max_tokens: request.maxTokens } : {}),
       ...(request.effort ? { reasoning: { effort: request.effort, exclude: true } } : {}),
-      provider: { require_parameters: true, data_collection: "deny", max_price: this.maxPrice },
+      provider: {
+        require_parameters: true,
+        data_collection: "deny",
+        max_price: this.maxPrice,
+        // Providers slower than this move to the end of the list, but are
+        // never excluded (OpenRouter's "performance thresholds"). Measured:
+        // most serve this model at 170 to 250 tokens a second, one at 118.
+        preferred_min_throughput: MIN_TOKENS_PER_SECOND,
+      },
     };
 
     const send = async () => {
-      const response = await this.post(body);
+      const response = await this.post(body, request.timeoutMs ?? this.timeoutMs);
       return { response, data: (await response.json().catch(() => ({}))) as RawReply };
     };
     // A provider that fails after it started answering still sends 200 OK,
@@ -117,7 +128,7 @@ export class OpenRouterClient implements ModelClient {
     };
   }
 
-  private async post(body: unknown): Promise<Response> {
+  private async post(body: unknown, timeoutMs: number): Promise<Response> {
     try {
       return await this.fetchImpl(ENDPOINT, {
         method: "POST",
@@ -127,13 +138,13 @@ export class OpenRouterClient implements ModelClient {
           "x-title": "minimi",
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(this.timeoutMs),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       const timedOut = (error as Error).name === "TimeoutError";
       throw new ModelError(
         timedOut ? "timeout" : "provider",
-        timedOut ? `The model did not answer within ${this.timeoutMs / 1000} seconds.` : "Could not reach OpenRouter.",
+        timedOut ? `The model did not answer within ${timeoutMs / 1000} seconds.` : "Could not reach OpenRouter.",
       );
     }
   }

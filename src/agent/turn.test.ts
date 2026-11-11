@@ -97,8 +97,13 @@ test("'has it changed': old sources are re-read and checked in code before the m
         { text: "Quillgres could not be confirmed", source: null, quote: "", status: "supported", oldClaim: "O4" },
       ],
     });
-  // The first draft cites the wrong page; the check sends it back once.
-  const model = new ScriptedModel([done, draft(2), done, draft(1)]);
+  // The first draft cites the wrong page; the check sends it back once, and
+  // the repair changes only that citation.
+  const fixCitation = json({
+    edits: [{ find: "[2]", replace: "[1]" }],
+    claims: [{ number: 1, remove: false, text: "Basalt Pro is now $79 a month", topic: "Basalt Pro price", source: 1, quote: "Pro: $79 / month", status: "same", oldClaim: "O2" }],
+  });
+  const model = new ScriptedModel([done, draft(2), done, fixCitation]);
   const result = await runTurn(
     { message: "Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?" },
     { ...deps, model },
@@ -287,14 +292,37 @@ test("a claim that never verifies is dropped after 2 repair rounds, and the rest
       { text: "Basalt has a 30-day free trial", source: 1, quote: "30-day free trial", status: "supported", oldClaim: null },
     ],
   });
-  const model = new ScriptedModel([search({ queries: ["Basalt pricing"] }), done, draft, done, draft, done, draft]);
+  const noChange = json({ edits: [], claims: [] });
+  const model = new ScriptedModel([search({ queries: ["Basalt pricing"] }), done, draft, done, noChange, done, noChange]);
   const result = await runTurn({ message: "How much is Basalt's Pro plan?" }, { ...deps, model });
   assert.equal(result.checks.repairRounds, 2);
+  assert.deepEqual(
+    model.requests.map((r) => r.jsonSchema?.name ?? "research"),
+    ["research", "research", "answer", "research", "repair", "research", "repair"],
+    "repair rounds send back changes only, never a full re-write",
+  );
   assert.equal(result.checks.dropped, 1);
   assert.deepEqual(result.claims.map((c) => c.text), ["Basalt Pro is $79 a month"]);
   assert.match(result.problems.join(" "), /Dropped a claim that failed its check: "Basalt has a 30-day free trial"/);
   // The dropped claim is not saved as something we said.
   assert.equal(deps.store.answersFor(result.chatId)[0]?.claims.length, 1);
+});
+
+test("a repair that cannot be applied exactly falls back to a full re-write", async () => {
+  const bad = json({
+    answer: "Pro is $79 [1].",
+    claims: [{ text: "Basalt has a 30-day free trial", source: 1, quote: "30-day free trial", status: "supported", oldClaim: null }],
+  });
+  const good = json({
+    answer: "Pro is $79 [1].",
+    claims: [{ text: "Basalt Pro is $79 a month", source: 1, quote: "Pro: $79 / month", status: "supported", oldClaim: null }],
+  });
+  const wrongEdit = json({ edits: [{ find: "text that is not in the draft", replace: "x" }], claims: [] });
+  const model = new ScriptedModel([search({ queries: ["Basalt pricing"] }), done, bad, done, wrongEdit, good]);
+  const result = await runTurn({ message: "How much is Basalt's Pro plan?" }, { ...deps, model });
+  assert.match(result.problems.join(" "), /could not be applied exactly, so the answer was written again/);
+  assert.deepEqual(result.claims.map((c) => c.text), ["Basalt Pro is $79 a month"]);
+  assert.equal(result.checks.repairRounds, 1);
 });
 
 test("a claim with no problems needs no repair round", async () => {
