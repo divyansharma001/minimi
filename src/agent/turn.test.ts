@@ -66,6 +66,10 @@ test("small talk: one model call, no tools, no search", async () => {
   assert.equal(model.requests[0]?.tools, undefined);
   assert.deepEqual(result.trace.searchQueries, []);
   assert.equal(result.answer, "Glad it helped!");
+  assert.deepEqual(deps.store.answersFor(result.chatId)[0]?.process?.steps.map((s) => s.text), [
+    "Writing the answer",
+    "Replied without searching: nothing needed looking up",
+  ]);
 });
 
 test("a memory question: the past chats are in the brief, and nothing is searched", async () => {

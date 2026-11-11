@@ -337,10 +337,20 @@ export async function runTurn(
     parsed = { ...parsed, claims: parsed.claims.filter((c) => !dropped.includes(c)) };
     checks.dropped = dropped.length;
     checks.claims = parsed.claims.length;
-    note(
-      `Checked ${checks.claims} ${checks.claims === 1 ? "fact against its page" : "facts against their pages"}` +
-        (checks.dropped > 0 ? `, dropped ${checks.dropped} that did not hold up` : ""),
-    );
+    if (checks.claims > 0 || checks.dropped > 0) {
+      note(
+        `Checked ${checks.claims} ${checks.claims === 1 ? "fact against its page" : "facts against their pages"}` +
+          (checks.dropped > 0 ? `, dropped ${checks.dropped} that did not hold up` : ""),
+      );
+    } else {
+      note(
+        path === "talk"
+          ? "Replied without searching: nothing needed looking up"
+          : path === "memory"
+            ? "Answered from your saved chats, without searching"
+            : "Found no facts to check in the answer",
+      );
+    }
 
     await mustBeSafe();
     const verdict = await safety;
