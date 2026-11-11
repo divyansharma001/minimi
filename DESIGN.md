@@ -1,56 +1,62 @@
 # Design
 
 A chat agent with one tool, web search, built to answer one question well: "What did I ask before, and is it still true today?"
-The full diagram is in `design.excalidraw`.
-The chat screen's visual system is in `docs/visual-system.md`.
+Diagram: `design.excalidraw`.
+Visual system: `docs/visual-system.md`.
 
 ## How it works
 
-Code does everything it can; the model does only research and writing.
+Code does everything it can; the model only researches and writes.
 
-1. **Read.** Save the message, with secrets removed. Start the safety check alongside everything else. Turn "last Tuesday" into real dates. Pick a path: small talk, a memory question, or research, which is the default.
-2. **Recall.** Find the old chat by exact date, then by keywords. A chat found by its date is the right chat; one found only by a few words is flagged as a weak match. If nothing is found, say so and ask.
-3. **Re-check.** When old answers are in question, code re-reads their sources and checks each old quote against today's page: still there ("same"), gone ("changed"), page gone ("could not confirm"), or never matched ("was wrong").
-4. **Research.** DeepSeek V4.1 Flash decides what else to search with `web_search`: one search per item named, news since a date, at most 10 queries and 3 rounds.
-5. **Write.** The model writes the answer as JSON: the reply, plus each claim with its exact quote from numbered evidence.
-6. **Check.** Code checks each quote against its saved page, and numbers and dates against the quote. Gaps get up to 2 repair searches; anything still unsure is marked "could not confirm".
-7. **Save and reply.** The answer, claims and page copies are saved. While it works you see live progress ("re-reading the sources from that chat", "searching"); the answer appears once every claim has passed, so nothing unchecked is shown.
+1. **Read.** Remove secrets, start the safety check alongside, turn "last Tuesday" into dates, and pick a path: small talk, memory, or research.
+2. **Recall.** Find the old chat by date, then by keywords.
+   A weak match is flagged; no match is said plainly, never invented.
+3. **Re-check.** Code re-reads each old answer's sources and looks for its saved quote on today's page.
+   The result is same, changed, could not confirm (page gone) or was wrong (never matched).
+4. **Research.** DeepSeek V4.1 Flash searches with `web_search`: one search per thing named, at most 10 queries and 3 rounds.
+5. **Write.** The model returns JSON: the reply, and every fact with its topic, source number and exact quote.
+6. **Check.** Code checks every quote against the saved page, and every number against its quote.
+   Facts on one topic from different sites whose values clash are kept together as "sources disagree", and the reply must give both sides.
+   Failures get up to 2 repair rounds that send back only the changes; whatever still fails is dropped.
+7. **Reply.** You see live steps, then the checked answer with its facts, sources and thought process.
+   Nothing unchecked is shown.
 
-The model is one line in `.env`, so any OpenAI-style model can replace it.
+**Web search:** Tavily finds pages; our own safe fetcher and cleaner read them, so an old copy and a new one differ only when the page did.
 
-**Web search tool:** Tavily finds pages > link gate > our own safe fetch > Markdown > dated snapshot > rank > short passages with sources.
-Tavily only finds pages; every saved copy goes through our own cleaner, so an old copy and a new one differ only when the page did.
-The link gate opens only links from results, the user or pages already read, and blocks local addresses and bad redirects.
-
-**Memory** is a folder of Markdown files, read into memory at startup and searched there, with no database to fall out of step with the files.
-On a fresh install the folder starts with demo chats dated relative to today, clearly marked as demo, so the sample questions work on a clean clone.
+**Memory** is a folder of Markdown files with a JSON header, read at startup and searched in memory.
+A fresh copy gets three real demo chats, dated "last Tuesday", "Monday" and "3 November", so the sample questions work at once.
 
 | Folder | Holds | Fact? |
 |---|---|---|
 | `chats/` | What you said, by date | No |
-| `answers/` | What we answered, with claims | No |
-| `pages/` | Source page copies, hashed, never edited | Yes, the only facts |
-
-So the agent can catch its own past mistakes: "On 3 Nov I told you $19, but the page that day said $29."
+| `answers/` | What we answered, with each fact's quote | No, a record |
+| `pages/` | Dated page copies, never edited | Yes, what quotes are checked against |
 
 ## Guardrails
 
 | Layer | Guardrail |
 |---|---|
-| Input | Llama Guard 4 checks every message, alongside the first steps, so it adds no wait. Harmful requests are refused before the web is touched; self-harm gets a caring reply with where to find help; medical, legal and money questions are answered. Keys, passwords and card numbers are removed before any model or file sees them. |
-| Web | Only public addresses, checked at connect time and after every redirect. Links the model makes up cannot carry query strings. Pages are capped at 3 MB, 10 seconds and text only. Hidden text, and text written to an AI, is cut before the model sees a page. |
-| Output | Answers are JSON checked again in code. Every quote must be on its saved page, and every number in a claim must be in its quote. The official site is cited over copies of it. A failed claim gets up to 2 repair rounds, then is dropped. Code, not the model, decides an old claim's status. |
-| Spend | Per message: at most 10 searches, 3 research rounds and a model price cap. Per day: `DAILY_SEARCH_LIMIT` and `DAILY_MODEL_SPEND_USD`. No provider that keeps prompts for training. |
+| Input | Llama Guard 4 runs alongside the first steps. Harmful requests are refused before the web is touched; self-harm gets a caring reply. Keys, passwords and card numbers are removed before any model or file sees them. |
+| Web | Public addresses only, checked at connect time and after redirects. Pages capped at 3 MB, 10 s, text only. Hidden text and text aimed at an AI are cut. |
+| Output | Quotes, numbers, conflicts and old-claim statuses are checked in code, not trusted to the model. |
+| Spend | Per message: 10 searches, 3 research rounds, a model price cap. Per day: `DAILY_SEARCH_LIMIT`, `DAILY_MODEL_SPEND_USD`. No provider that trains on prompts. |
+| Time | Research calls 30 s, repairs 45 s, writer 90 s. After 75 s no new round starts. A failed search ends the research, not the turn. |
 
-If the safety model is down, the agent still answers and logs it: one provider's outage should not stop the agent, and the main model has its own safety.
+## Measured
+
+| | Result |
+|---|---|
+| Test set (19 cases on a fake web with dated page versions) | 19/19 cases, 102/102 checks, about $0.02 per full run |
+| Live 3-to-5-company pricing questions | 28 to 68 s, was 41 to 136 s before small repairs |
+| Cost per live answer | $0.008 to $0.019; small talk about $0.0002 |
+| Repair round | about 2 s with thinking off, was 40 to 90 s as a full re-write |
 
 ## Why it is built this way
 
-- **The test questions are about memory over time, and many name several things at once.** ChatGPT and Perplexity remember facts about you, not the evidence behind an old answer.
-- **A cheap, fast model makes mistakes.** So code checks dates, quotes, numbers and hashes, and the model only writes and judges.
+- **The test questions are about memory over time.** ChatGPT and Perplexity remember facts about you, not the evidence behind an old answer.
+- **A cheap, fast model makes mistakes,** so code checks dates, quotes, numbers and conflicts, and the model only writes and judges.
 - **One tool means memory is the app's job.** The model never has to remember to look.
-- **Files show their work.** Anyone can read what the agent knows. Page copies are dated and never overwritten, so "then vs now" compares two files.
-- **One loop, no multi-agent setup.** Fewer parts, fewer ways to be wrong.
+- **Files show their work.** Anyone can read what the agent knows and when it read it.
 
 ## Considered and rejected
 
@@ -58,21 +64,15 @@ If the safety model is down, the agent still answers and logs it: one provider's
 |---|---|
 | Memory as a second tool | Breaks the one-tool rule, and a small model forgets to use it |
 | Memory found only by meaning | Fuzzy on dates and prices, and always returns something |
-| A background user summary, like ChatGPT | OpenAI says theirs went stale and held conflicting facts |
-| Stream the draft, strike out errors later | A wrong price shown briefly is still wrong |
-| SearXNG in Docker | Free, but every reviewer would need Docker running |
-| Reading pages with Tavily too | Two different cleaners would make unchanged pages look changed |
+| Streaming the draft | A wrong price shown briefly is still wrong |
+| Picking one value when sources disagree | Hides exactly what the user needs to judge |
+| Lower writer effort | Measured: providers ignore it, one thought for 12,000 tokens on "low" |
 | An agent framework | Hides the loop, the part worth reading |
-| Pricier models (Claude, GPT) | About 4 to 14 times the cost per answer |
-| A local model | Weaker and slower, and reviewers would need a multi-GB download |
-| Free tiers | Quotas too small for one review session |
-| A guard that blocks every flagged category | Medical, legal and money questions are normal; blocking them makes the agent worse |
+| Pricier or local models | 4 to 14 times the cost, or a multi-GB download for reviewers |
 
 ## With another week
 
-- Grow the test set and publish scores against ChatGPT and Perplexity on dated questions.
-- Pick the model by test score and tune prompts for it.
+- Grow the test set, and score against ChatGPT and Perplexity on dated questions.
+- Allow numbers from a page's own title in quote checks ("Node.js 20" on a Node 20 page).
 - Rank sources by more than "official site first".
-- Better handling of sites that block bots.
-- Read logged-in pages through a vault of saved sessions.
-- Tidy the memory folder over long use.
+- Handle sites that block bots, and read logged-in pages through a vault.
