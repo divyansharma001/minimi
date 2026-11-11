@@ -10,6 +10,8 @@ import type { OldClaimCheck } from "./claim-checks.ts";
 
 export type FinalClaim = {
   text: string;
+  /** What the fact is about, named by the writer. Facts on one topic can disagree. */
+  topic: string;
   quote: string;
   url: string;
   status: ClaimStatus;
@@ -18,13 +20,15 @@ export type FinalClaim = {
   oldClaim: string | null;
   /** The day the source page was read. */
   readOn: string;
+  /** The conflict group this fact belongs to, set by code; null if none. */
+  conflict: number | null;
 };
 
 export type ParsedAnswer = { answer: string; claims: FinalClaim[]; problems: string[] };
 
 const STATUSES = new Set<ClaimStatus>(["supported", "same", "changed", "was-wrong", "cannot-confirm"]);
 
-type RawClaim = { text?: unknown; source?: unknown; quote?: unknown; status?: unknown; oldClaim?: unknown };
+type RawClaim = { text?: unknown; topic?: unknown; source?: unknown; quote?: unknown; status?: unknown; oldClaim?: unknown };
 
 export function parseAnswer(
   content: string,
@@ -74,6 +78,7 @@ export function parseAnswer(
     }
     claims.push({
       text: raw.text,
+      topic: typeof raw.topic === "string" ? raw.topic.trim() : "",
       quote: typeof raw.quote === "string" ? raw.quote : "",
       // A report on an old claim is about that claim's own page.
       url: old?.claim.url ?? item?.url ?? "",
@@ -81,6 +86,7 @@ export function parseAnswer(
       source,
       oldClaim: old ? old.ref : null,
       readOn: item?.readOn ?? today,
+      conflict: null,
     });
   }
   return { answer: data.answer.trim(), claims, problems };

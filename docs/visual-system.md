@@ -38,6 +38,7 @@ Status colours carry meaning, and every pair is at least 4.5:1 for small text:
 |---|---|---|---|
 | Checked, Still true | green-800 on green-100 | Stable, safe to rely on | 7.3:1 |
 | Changed | `#6B4C1C` on `#FFF0CF` | Attention, not alarm: the world moved | 7.0:1 |
+| Sources disagree | `#6B4C1C` on white, `#FFE8B7` outline | Look closer: two pages differ | 7.8:1 |
 | Was wrong | `#A21913` on `#FDE7E2` | An honest correction, not a failure | 6.6:1 |
 | Couldn't confirm | `#525252` on `#F5F5F5` | Unknown, neither good nor bad | 7.2:1 |
 
@@ -62,6 +63,12 @@ Weights 400, 500 and 600 only: hierarchy comes from size and weight steps, never
 - **Checked facts** is a dropdown, closed by default.
 The closed row shows a small pill per status with its count ("12 checked", "1 changed"), so a change is visible without opening it.
 Open, each row shows a grey sentence, the bold value, the source chip and read date, and the status pill.
+- **Sources that disagree** sit together in the facts list, under "Sources disagree" and their topic, on a warm amber rail.
+The closed row adds an outlined amber chip, "1 disagreement".
+Amber, as for "Changed", means "look closer"; outlined rather than filled, because nothing moved: two pages just say different things.
+Each fact keeps its own "Checked" pill, since each is true to its own page.
+- **Thought process** is a quiet closed row at the top of an answer ("Thought process · 31 s · 2 searches · 8 pages"); open, a thin timeline of the steps with their times.
+- **Citation chips** open the source page in a new tab, with the site and page title on hover.
 - **Your messages** have edit and delete buttons: left of the bubble on hover or keyboard focus, and always shown under it on touch screens.
 Edit turns the bubble into a white panel with "Cancel" and "Ask again", and says what it will replace.
 Delete asks inline on a small white card, never in a pop-up.

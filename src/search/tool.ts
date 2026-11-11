@@ -48,6 +48,8 @@ export type Evidence = {
   pageDate?: PageDate;
   /** True when the page could not be read and only the search snippet is known. */
   snippetOnly: boolean;
+  /** True when the site's name is in the search: likely the company's own site. */
+  official?: boolean;
 };
 
 export type PageOutcome = "read" | "not-found" | "failed" | "blocked";
@@ -230,6 +232,7 @@ export async function webSearch(rawInput: WebSearchInput, deps: WebSearchDeps, f
       readOn: snapshot.day,
       ...(snapshot.pageDate ? { pageDate: snapshot.pageDate } : {}),
       snippetOnly: false,
+      ...(r.official ? { official: true } : {}),
     };
   });
 

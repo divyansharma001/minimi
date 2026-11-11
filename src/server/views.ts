@@ -45,6 +45,8 @@ export function answerFromRecord(record: AnswerRecord): AnswerView {
     site: siteOf(c.url),
     url: c.url,
     readOn: c.capturedOn,
+    ...(c.topic ? { topic: c.topic } : {}),
+    conflict: c.conflict ?? null,
   }));
   return { claims, sources, refused: false, ...(record.process ? { process: record.process } : {}) };
 }

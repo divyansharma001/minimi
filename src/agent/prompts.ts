@@ -110,8 +110,9 @@ export function formatEvidence(items: Evidence[], startRef = 1): string {
     .map((e, i) => {
       const date = e.pageDate ? `; page ${e.pageDate.kind} ${e.pageDate.day}` : "";
       const weak = e.snippetOnly ? "; search snippet only, the page could not be read" : "";
+      const official = e.official ? ` official="yes"` : "";
       const heading = e.heading ? `\nSection: ${e.heading}` : "";
-      return `<evidence ref="${startRef + i}" url="${e.url}" title="${e.title.replace(/"/g, "'")}" read="${e.readOn}${date}${weak}">${heading}\n${e.text}\n</evidence>`;
+      return `<evidence ref="${startRef + i}" url="${e.url}" title="${e.title.replace(/"/g, "'")}" read="${e.readOn}${date}${weak}"${official}>${heading}\n${e.text}\n</evidence>`;
     })
     .join("\n\n");
 }
@@ -139,6 +140,7 @@ export function researchSystemPrompt(brief: Brief, maxQueries: number): string {
       `You have one tool, web_search. How to use it:`,
       `- If the user asks about several things (for example 5 tools), search each one in its own call, all in the same turn.`,
       `- For prices, look for the official pricing page, for example "<name> pricing".`,
+      `- If sources in the evidence disagree on a fact the answer needs, and the company's own page (official="yes") is not among them, search for it.`,
       `- For "anything new since <day>", use topic "news" with since set to that day.`,
       `- Don't search for what the evidence below already answers.`,
       `- Search only what the answer needs: usually 1 to 3 queries. Use more only when the user asks about several separate things.`,
@@ -165,9 +167,10 @@ export const ANSWER_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["text", "source", "quote", "status", "oldClaim"],
+        required: ["text", "topic", "source", "quote", "status", "oldClaim"],
         properties: {
           text: { type: "string" },
+          topic: { type: "string" },
           source: { type: ["integer", "null"] },
           quote: { type: "string" },
           status: { type: "string", enum: ["supported", "same", "changed", "was-wrong", "cannot-confirm"] },
@@ -192,13 +195,19 @@ export function writerSystemPrompt(brief: Brief): string {
       `- If the app noted an assumption about a date, tell the user.`,
       `- Old claims (O1, O2, ...) come with a status the app worked out. Keep it. For "changed", give the old and the new value with both dates: the old answer was right when given, so do not call it wrong. For "was-wrong", say plainly that your earlier answer was wrong.`,
     ].join("\n"),
-    `Sources: when a company's own site is in the evidence and states the fact, cite it rather than a site that copies it.`,
+    `Sources: when a company's own site is in the evidence and states the fact, cite it rather than a site that copies it. official="yes" marks a page on the company's own site.`,
+    [
+      `Sources that disagree:`,
+      `- If two sources give different values for the same thing, never pick one silently and never average them. Give both values, each with its [n], and say which is more reliable and why: the company's own site, a newer page date, or a real difference such as monthly against annual billing, region or plan.`,
+      `- Give each side its own claim, with the same topic.`,
+    ].join("\n"),
     `Style: plain words, short, answer first. Use bullets or a small table to compare. Cite every fact with [n].`,
     [
       `Reply as JSON:`,
       `- answer: the reply in Markdown, with [n] citations.`,
       `- claims: one entry per fact from the evidence that the answer states, and one per old claim it reports on.`,
       `  - text: one fact, in one sentence. Two facts from different lines of a page are two claims.`,
+      `  - topic: a short name for what the fact is about, like "Freshsales Growth price per user per month". Claims about the same thing use exactly the same topic.`,
       `  - source: the evidence number it rests on. null only for cannot-confirm, or was-wrong with no new evidence.`,
       `  - quote: the words from that evidence that support it, copied exactly. Every number in text must appear in quote. Empty when source is null.`,
       `  - status: supported (a new fact), same, changed, was-wrong, or cannot-confirm.`,

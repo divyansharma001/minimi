@@ -46,6 +46,10 @@ export type StoredClaim = {
   /** The day the source page was read. */
   capturedOn: IsoDate;
   status: ClaimStatus;
+  /** What the fact is about, as the writer named it. */
+  topic?: string;
+  /** Facts with the same number here come from sources that disagree. */
+  conflict?: number;
 };
 
 /** A numbered source cited in an answer, kept so a reopened chat still links its [n] markers. */

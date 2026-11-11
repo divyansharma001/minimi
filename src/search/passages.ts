@@ -102,7 +102,13 @@ function splitLong(text: string, maxChars: number): string[] {
 }
 
 export type PageForRanking = { url: string; title: string; passages: Passage[]; mustInclude: boolean };
-export type RankedPassage = { url: string; passage: Passage; score: number };
+export type RankedPassage = {
+  url: string;
+  passage: Passage;
+  score: number;
+  /** The page's site name is in the question: likely the company's own site. */
+  official: boolean;
+};
 
 /**
  * Picks the best passages across pages for a question.
@@ -131,18 +137,18 @@ export function rankPassages(
   const index = new KeywordIndex(all.map((a) => ({ id: a.id, text: `${a.page.title}\n${a.passage.heading}\n${a.passage.text}` })));
   const scores = new Map(index.search(query).map((h) => [h.id, h.score]));
 
+  const isOfficial = (url: string) => terms(new URL(url).hostname.split(".").join(" ")).some((t) => queryStems.has(t.stem));
   const ranked = all
     .map((a) => {
-      const host = new URL(a.page.url).hostname.split(".");
-      const official = terms(host.join(" ")).some((t) => queryStems.has(t.stem));
-      return { ...a, score: (scores.get(a.id) ?? 0) * (official ? 1.5 : 1) };
+      const official = isOfficial(a.page.url);
+      return { ...a, official, score: (scores.get(a.id) ?? 0) * (official ? 1.5 : 1) };
     })
     .sort((x, y) => y.score - x.score);
 
   const chosen: RankedPassage[] = [];
   const perPageCount = new Map<string, number>();
-  const take = (item: (typeof ranked)[number]) => {
-    chosen.push({ url: item.page.url, passage: item.passage, score: item.score });
+  const take = (item: (typeof all)[number] & { score: number }) => {
+    chosen.push({ url: item.page.url, passage: item.passage, score: item.score, official: isOfficial(item.page.url) });
     perPageCount.set(item.page.url, (perPageCount.get(item.page.url) ?? 0) + 1);
   };
 

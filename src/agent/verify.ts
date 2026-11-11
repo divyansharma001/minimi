@@ -21,6 +21,8 @@ export type ClaimProblem = {
   kind: "hard" | "soft";
   /** Plain words, shown to the writer in a repair round. */
   reason: string;
+  /** True when one more search may settle it, even though it is soft. */
+  research?: boolean;
 };
 
 /** The full text of the page an evidence item came from. */

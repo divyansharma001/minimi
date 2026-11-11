@@ -23,7 +23,8 @@ import { LIMITS, webSearch, type Evidence, type PageReport, type WebSearchDeps, 
 import type { Trace } from "../eval/types.ts";
 import { parseAnswer, type FinalClaim } from "./answer.ts";
 import { checkOldClaims, type OldClaimCheck } from "./claim-checks.ts";
-import { checkClaims } from "./verify.ts";
+import { checkClaims, type ClaimProblem } from "./verify.ts";
+import { checkConflictsShown, findConflicts, withConflicts } from "./conflicts.ts";
 import { choosePath, type Path } from "./intent.ts";
 import { checkInput, REFUSAL, SUPPORT_REPLY, type SafetyVerdict } from "../guardrails/input-safety.ts";
 import { redactSecrets } from "../guardrails/redact.ts";
@@ -311,30 +312,40 @@ export async function runTurn(
     // dropped from the claims and recorded.
     const pageText = (item: Evidence) =>
       (item.snapshotId ? deps.search.snapshots.get(item.snapshotId)?.markdown : undefined) ?? item.text;
-    let claimProblems = checkClaims(parsed.claims, evidence, oldChecks, pageText, day);
+    // Facts that passed their own checks may still disagree with each other.
+    // Every side of a disagreement must be in the answer, not just one.
+    const checkAll = (): ClaimProblem[] => {
+      const found = checkClaims(parsed.claims, evidence, oldChecks, pageText, day);
+      const failed = new Set(found.filter((p) => p.kind === "hard").map((p) => p.claim));
+      const groups = findConflicts(parsed.claims.filter((c) => !failed.has(c)));
+      return [...found, ...checkConflictsShown(groups, parsed.answer, evidence)];
+    };
+    let claimProblems = checkAll();
     for (let round = 0; round < TURN_LIMITS.repairRounds && claimProblems.length > 0; round += 1) {
       checks.repairRounds += 1;
       problems.push(
         `Repair round ${checks.repairRounds}: ${claimProblems.map((p) => `"${p.claim.text}" (${p.reason})`).join("; ")}.`,
       );
       onEvent({ type: "status", text: `Checking: ${claimProblems.length} claim${claimProblems.length === 1 ? "" : "s"} need another look` });
-      const hard = claimProblems.filter((p) => p.kind === "hard");
-      if (path === "research" && hard.length > 0) {
-        const list = hard.map((p) => `- "${p.claim.text}": ${p.reason}`).join("\n");
+      const toSettle = claimProblems.filter((p) => p.kind === "hard" || p.research);
+      if (path === "research" && toSettle.length > 0) {
+        const list = toSettle.map((p) => `- "${p.claim.text}": ${p.reason}`).join("\n");
         await research(
           researchMessages(
-            `${message}\n\nThe app could not verify these statements against the evidence:\n${list}\nSearch for evidence that settles them, or reply DONE if the evidence already does or none can exist.`,
+            `${message}\n\nThe app could not verify or settle these statements with the evidence:\n${list}\nSearch for evidence that settles them, such as the company's own page, or reply DONE if the evidence already does or none can exist.`,
           ),
           1,
         );
       }
       checkFailures = claimProblems.map((p) => `"${p.claim.text}": ${p.reason}.`);
       parsed = await write();
-      claimProblems = checkClaims(parsed.claims, evidence, oldChecks, pageText, day);
+      claimProblems = checkAll();
     }
     const dropped = claimProblems.filter((p) => p.kind === "hard").map((p) => p.claim);
     for (const claim of dropped) problems.push(`Dropped a claim that failed its check: "${claim.text}".`);
     parsed = { ...parsed, claims: parsed.claims.filter((c) => !dropped.includes(c)) };
+    const conflicts = findConflicts(parsed.claims);
+    parsed = { ...parsed, claims: withConflicts(parsed.claims, conflicts) };
     checks.dropped = dropped.length;
     checks.claims = parsed.claims.length;
     if (checks.claims > 0 || checks.dropped > 0) {
@@ -342,6 +353,7 @@ export async function runTurn(
         `Checked ${checks.claims} ${checks.claims === 1 ? "fact against its page" : "facts against their pages"}` +
           (checks.dropped > 0 ? `, dropped ${checks.dropped} that did not hold up` : ""),
       );
+      if (conflicts.length > 0) note(`Sources disagree on: ${conflicts.map((g) => g.topic).join("; ")}. Both sides are kept`);
     } else {
       note(
         path === "talk"
@@ -377,7 +389,15 @@ export async function runTurn(
       day,
       question: message,
       answer: parsed.answer,
-      claims: parsed.claims.map((c) => ({ text: c.text, quote: c.quote, url: c.url, capturedOn: c.readOn, status: c.status })),
+      claims: parsed.claims.map((c) => ({
+        text: c.text,
+        quote: c.quote,
+        url: c.url,
+        capturedOn: c.readOn,
+        status: c.status,
+        ...(c.topic ? { topic: c.topic } : {}),
+        ...(c.conflict !== null ? { conflict: c.conflict } : {}),
+      })),
       sources,
       process: { steps, ms: Date.now() - started, searches: queries.length, pages: pagesRead.size },
     });
@@ -399,7 +419,7 @@ export async function runTurn(
         recalledChatIds: recalled.chats.map((r) => r.chat.id),
         searchQueries: queries,
         pagesRead: [...pagesRead],
-        claims: parsed.claims.map((c) => ({ text: c.text, quote: c.quote, url: c.url, status: c.status })),
+        claims: parsed.claims.map((c) => ({ text: c.text, quote: c.quote, url: c.url, status: c.status, conflict: c.conflict })),
         answer: parsed.answer,
         timings: { totalMs: Date.now() - started, firstTextMs: Date.now() - started },
       },

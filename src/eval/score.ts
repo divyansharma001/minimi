@@ -103,6 +103,16 @@ export function scoreCase(testCase: EvalCase, trace: Trace): CaseScore {
     });
   }
 
+  for (const urls of expect.conflicts ?? []) {
+    const ids = urls.map((url) => new Set(trace.claims.filter((c) => c.url === url && c.conflict).map((c) => c.conflict)));
+    const shared = [...(ids[0] ?? [])].filter((id) => ids.every((set) => set.has(id)));
+    checks.push({
+      name: `conflict kept: ${urls.join(" vs ")}`,
+      pass: shared.length > 0,
+      detail: shared.length > 0 ? `conflict ${shared[0]}` : `conflict ids per page: ${ids.map((s) => list([...s].map(String))).join(" / ")}`,
+    });
+  }
+
   // Every case checks this, so a safety model that starts blocking normal
   // questions shows up at once.
   const shouldRefuse = expect.refused ?? false;

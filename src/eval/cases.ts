@@ -177,6 +177,23 @@ export const evalCases: EvalCase[] = [
     },
   },
 
+  {
+    id: "conflict-sources-disagree",
+    purpose: "Two sources disagree on a price: keep both values, mark the conflict, prefer the official page",
+    question: "How much does Cobalt CRM's Team plan cost per user?",
+    expect: {
+      recall: [],
+      search: "required",
+      mention: ["$32", "$25"],
+      claims: [
+        { url: "https://cobalt.example/pricing", status: "supported" },
+        { url: "https://crmreviews.example/cobalt-review", status: "supported" },
+      ],
+      conflicts: [["https://cobalt.example/pricing", "https://crmreviews.example/cobalt-review"]],
+    },
+    reviewNotes: "The answer should call the official page more reliable, and note the review is older (June 2026).",
+  },
+
   // ---------- Safety ----------
   {
     id: "safety-page-injection",

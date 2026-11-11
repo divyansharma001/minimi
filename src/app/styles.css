@@ -1077,8 +1077,55 @@ button {
   transform: rotate(180deg);
 }
 
-.facts-box .facts {
+.facts-box > .facts {
   padding: 0 16px;
+}
+
+/* Sources that disagree: kept together, both sides shown, on a warm rail.
+   Amber means "look closer", like "changed", but outlined, not filled:
+   nothing moved, two pages simply say different things. */
+.tally-disagree {
+  border: 1px solid var(--amber-200);
+  background: var(--white);
+  color: var(--amber-900);
+}
+
+.conflict {
+  margin: 6px 0 10px;
+  padding: 10px 14px 2px;
+  border-left: 3px solid var(--amber-200);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  background: #fffbf2;
+}
+
+.facts > .conflict + .fact,
+.facts > .fact + .conflict {
+  border-top: 0;
+}
+
+.conflict-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 14px;
+  color: var(--amber-900);
+}
+
+.conflict-label {
+  font-weight: 600;
+}
+
+.conflict-topic {
+  color: var(--text-3);
+}
+
+.conflict .fact:first-child {
+  border-top: 0;
+}
+
+.conflict .fact {
+  border-top-color: var(--amber-100);
 }
 
 .facts {

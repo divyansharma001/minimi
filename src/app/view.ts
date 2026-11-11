@@ -20,6 +20,10 @@ export type ClaimView = {
   site: string;
   url: string;
   readOn: string;
+  /** What the fact is about. */
+  topic?: string;
+  /** Facts with the same number come from sources that disagree; null if none. */
+  conflict: number | null;
 };
 
 export type SourceView = {

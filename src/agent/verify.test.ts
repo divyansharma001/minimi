@@ -22,6 +22,8 @@ const pageText = (e: Evidence) => fullPages[e.url] ?? e.text;
 
 const claim = (overrides: Partial<FinalClaim>): FinalClaim => ({
   text: "Neon Launch costs $0.106 per CU-hour",
+  topic: "Neon Launch compute price",
+  conflict: null,
   quote: "Launch: $0.106 per CU-hour",
   url: "https://neon.com/pricing",
   status: "supported",

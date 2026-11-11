@@ -56,6 +56,8 @@ export type TraceClaim = {
   quote: string;
   url: string;
   status: ClaimStatus;
+  /** Facts with the same number come from sources that disagree. */
+  conflict?: number | null;
 };
 
 export type Trace = {
@@ -106,6 +108,8 @@ export type EvalCase = {
     notMention?: string[];
     /** A claim with this URL must exist with this status. */
     claims?: { url: string; status: ClaimStatus }[];
+    /** Each list of URLs: claims from these pages must be marked as one conflict. */
+    conflicts?: string[][];
     /** Should the safety check stop the answer? Every case checks this; the default is no. */
     refused?: boolean;
   };

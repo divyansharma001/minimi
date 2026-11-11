@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRightLeft, Check, ChevronDown, CircleHelp, ExternalLink, Undo2 } from "lucide-react";
+import { ArrowRightLeft, Check, ChevronDown, CircleHelp, ExternalLink, Scale, Undo2 } from "lucide-react";
 import type { ClaimStatus } from "@/memory/types.ts";
 import type { ClaimView, MessageView, SourceView } from "../view.ts";
 import { CiteLink, Markdown } from "./Markdown.tsx";
@@ -33,6 +33,23 @@ function tally(claims: ClaimView[]) {
   return (Object.keys(STATUS) as ClaimStatus[])
     .map((status) => ({ status, count: claims.filter((c) => c.status === status).length }))
     .filter((t) => t.count > 0);
+}
+
+/**
+ * Facts in the order the writer gave them, except that facts from sources
+ * that disagree are pulled together, where the first of them stood.
+ */
+type FactRow = { kind: "fact"; claim: ClaimView; index: number } | { kind: "conflict"; id: number; topic: string; claims: { claim: ClaimView; index: number }[] };
+
+function factRows(claims: ClaimView[]): FactRow[] {
+  const rows: FactRow[] = [];
+  claims.forEach((claim, index) => {
+    if (claim.conflict === null) return void rows.push({ kind: "fact", claim, index });
+    const group = rows.find((r): r is Extract<FactRow, { kind: "conflict" }> => r.kind === "conflict" && r.id === claim.conflict);
+    if (group) group.claims.push({ claim, index });
+    else rows.push({ kind: "conflict", id: claim.conflict, topic: claim.topic ?? "", claims: [{ claim, index }] });
+  });
+  return rows;
 }
 
 /**
@@ -113,6 +130,17 @@ export function AnswerCard({ message }: { message: MessageView }) {
   const anchor = `src-${message.id}`;
   const claims = message.answer?.claims ?? [];
   const { pages, pageOfUrl, pageOf } = byPage(message.answer?.sources ?? []);
+  const rows = factRows(claims);
+  const disagreements = rows.filter((r) => r.kind === "conflict").length;
+  const fact = ({ claim, index }: { claim: ClaimView; index: number }) => (
+    <Fact
+      claim={claim}
+      index={index}
+      page={pageOfUrl.get(claim.url)}
+      source={pages[(pageOfUrl.get(claim.url) ?? 0) - 1]}
+      key={`${claim.text}-${index}`}
+    />
+  );
   return (
     <article className="card" aria-label="Answer">
       {message.answer?.process && <ThoughtProcess process={message.answer.process} />}
@@ -129,19 +157,29 @@ export function AnswerCard({ message }: { message: MessageView }) {
                   {count} {STATUS[status].label.toLowerCase()}
                 </span>
               ))}
+              {disagreements > 0 && (
+                <span className="tally tally-disagree">
+                  {disagreements} {disagreements === 1 ? "disagreement" : "disagreements"}
+                </span>
+              )}
             </span>
             <ChevronDown className="chevron" size={18} aria-hidden="true" />
           </summary>
           <ul className="facts">
-            {claims.map((claim, i) => (
-              <Fact
-                claim={claim}
-                index={i}
-                page={pageOfUrl.get(claim.url)}
-                source={pages[(pageOfUrl.get(claim.url) ?? 0) - 1]}
-                key={`${claim.text}-${i}`}
-              />
-            ))}
+            {rows.map((row) =>
+              row.kind === "fact" ? (
+                fact(row)
+              ) : (
+                <li className="conflict" key={`conflict-${row.id}`}>
+                  <div className="conflict-head">
+                    <Scale size={16} aria-hidden="true" />
+                    <span className="conflict-label">Sources disagree</span>
+                    {row.topic && <span className="conflict-topic">{row.topic}</span>}
+                  </div>
+                  <ul className="facts">{row.claims.map(fact)}</ul>
+                </li>
+              ),
+            )}
           </ul>
         </details>
       )}
