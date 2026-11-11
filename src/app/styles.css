@@ -374,16 +374,6 @@ button {
   white-space: nowrap;
 }
 
-.tag {
-  flex: none;
-  padding: 1px 8px;
-  border-radius: var(--radius-full);
-  background: var(--grey-100);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--grey-800);
-}
-
 .sidebar-empty {
   padding: 10px;
   font-size: 14px;
@@ -490,22 +480,6 @@ button {
 
 .suggestion:active {
   transform: scale(0.98);
-}
-
-.notice {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  margin-top: 28px;
-  max-width: 60ch;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--on-field);
-}
-
-.notice svg {
-  flex: none;
-  margin-top: 2px;
 }
 
 /* ---------- Messages ---------- */

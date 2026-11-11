@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CircleAlert, Menu, ShieldCheck, SquarePen } from "lucide-react";
+import { CircleAlert, Menu, SquarePen } from "lucide-react";
 import type { ChatEvent, ChatSummary, ChatView, MessageView } from "../view.ts";
 import { AnswerCard } from "./AnswerCard.tsx";
 import { Composer } from "./Composer.tsx";
@@ -9,11 +9,11 @@ import { Sidebar } from "./Sidebar.tsx";
 import { UserMessage } from "./UserMessage.tsx";
 import { Working } from "./Working.tsx";
 
+// Real questions only: a question about a past chat needs a real past chat.
 const SUGGESTIONS = [
-  "What did I ask you on 3 November? Is your answer still correct today?",
-  "Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?",
-  "On Monday we shortlisted 5 CRM tools for a 20-person sales team. Has any of them changed pricing or shipped something big since?",
   "What does Neon charge for its paid Postgres plans right now?",
+  "We are shortlisting HubSpot, Pipedrive and Zoho CRM for a 20-person sales team. What does each cost per user per month?",
+  "Which Node.js versions are LTS right now, and when does Node.js 22 reach end of life?",
 ];
 
 const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -277,12 +277,6 @@ export function ChatApp() {
                     </button>
                   ))}
                 </div>
-                {chats.some((c) => c.demo) && (
-                  <p className="notice">
-                    <ShieldCheck size={16} aria-hidden="true" />
-                    The chats marked Demo came with this copy, so you can ask about past dates straight away. Their facts show the day each page was really read.
-                  </p>
-                )}
               </section>
             ) : (
               <div className="messages">

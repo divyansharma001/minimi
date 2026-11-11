@@ -9,7 +9,6 @@ export type ChatSummary = {
   /** The day the chat started, YYYY-MM-DD in the user's time zone. */
   day: string;
   startedAt: string;
-  demo: boolean;
 };
 
 export type ClaimView = {

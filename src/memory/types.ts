@@ -33,8 +33,6 @@ export type ChatRecord = {
   title: string;
   startedAt: string;
   turns: Turn[];
-  /** Demo chats that ship with a fresh install, labelled as such on screen. */
-  demo?: boolean;
 };
 
 export type StoredClaim = {

@@ -24,7 +24,7 @@ Code does everything it can; the model only researches and writes.
 **Web search:** Tavily finds pages; our own safe fetcher and cleaner read them, so an old copy and a new one differ only when the page did.
 
 **Memory** is a folder of Markdown files with a JSON header, read at startup and searched in memory.
-A fresh copy gets three real demo chats, dated "last Tuesday", "Monday" and "3 November", so the sample questions work at once.
+There are no sample chats: memory holds only what the user really asked, so a fresh install answers "On Monday we..." by saying it has no chat from Monday.
 
 | Folder | Holds | Fact? |
 |---|---|---|
@@ -66,6 +66,7 @@ A fresh copy gets three real demo chats, dated "last Tuesday", "Monday" and "3 N
 | Memory found only by meaning | Fuzzy on dates and prices, and always returns something |
 | Streaming the draft | A wrong price shown briefly is still wrong |
 | Picking one value when sources disagree | Hides exactly what the user needs to judge |
+| Pre-made demo chats, or a clock to fake dates | Memory you never made is a staged test; it must hold only what you really asked |
 | Lower writer effort | Measured: providers ignore it, one thought for 12,000 tokens on "low" |
 | An agent framework | Hides the loop, the part worth reading |
 | Pricier or local models | 4 to 14 times the cost, or a multi-GB download for reviewers |

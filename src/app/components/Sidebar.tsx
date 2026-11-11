@@ -62,7 +62,6 @@ function ChatRow({ chat, active, busy, onOpen, onDelete }: { chat: ChatSummary; 
     <div className="chat-row" data-active={active}>
       <button className="chat-item" aria-current={active} onClick={onOpen} title={chat.title}>
         <span className="chat-item-title">{chat.title}</span>
-        {chat.demo && <span className="tag">Demo</span>}
       </button>
       {!busy && (
         <button className="row-action" onClick={() => setConfirming(true)} aria-label={`Delete chat: ${chat.title}`} title="Delete chat">

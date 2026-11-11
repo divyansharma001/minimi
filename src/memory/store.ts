@@ -133,13 +133,12 @@ export class MemoryStore {
     return [...this.answers.values()].filter((a) => a.chatId === chatId).sort((a, b) => a.at.localeCompare(b.at));
   }
 
-  async createChat(input: { firstMessage: string; at: string; day: IsoDate; id?: string; title?: string; demo?: boolean }) {
+  async createChat(input: { firstMessage: string; at: string; day: IsoDate; id?: string; title?: string }) {
     const chat: ChatRecord = {
       id: input.id ?? shortId(),
       title: input.title ? clean(input.title) : titleFrom(input.firstMessage),
       startedAt: input.at,
       turns: [],
-      ...(input.demo ? { demo: true } : {}),
     };
     const path = join(this.dir, CHATS, `${input.day}-${slug(chat.title)}-${chat.id}.md`);
     this.paths.set(chat.id, path);

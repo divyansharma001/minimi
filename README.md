@@ -20,16 +20,16 @@ npm run dev            # open http://localhost:3000
 
 ## Try it
 
-The first time it starts, the app adds three real demo chats to an empty memory, marked **Demo**.
-They are dated from the day you first run it, so these questions work straight away:
+Memory here is only ever real: there are no sample chats, so the agent can only remember what you actually asked.
+A fresh install starts empty.
 
-| Ask | What should happen |
-|---|---|
-| On Monday we shortlisted 5 CRM tools for a 20-person sales team. Has any of them changed pricing or shipped something big since? | Finds the Monday CRM chat, re-reads its sources, says what changed since Monday and what did not. |
-| What did I ask you on 3 November? Is your answer still correct today? | Finds the 3 November Node.js chat, re-checks each old fact, says whether it still holds. |
-| Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then? | Finds the Tuesday Postgres chat and compares old prices with today's pages. |
-| What did I ask you on 25 October? | Says there is no chat from that day, instead of making one up. |
-| What does Neon charge for its paid plans right now? | A fresh question: searches, cites, checks every fact. |
+| Step | Ask | What should happen |
+|---|---|---|
+| 1 | What does Neon charge for its paid Postgres plans right now? | Searches, answers, cites a source for every fact, and checks each one. |
+| 2 | Start a **new chat**, then: What did I ask you earlier today? Is your answer still correct? | Finds the chat from step 1, re-reads its sources today, and says which facts still hold. |
+| 3 | What did I ask you on 25 October? | Says there is no chat from that day, instead of making one up. |
+| 4 | On Monday we shortlisted 5 CRM tools for a 20-person sales team. Has any of them changed pricing or shipped something big since? | On a fresh install there is no Monday chat, so it says so plainly and asks which tools you mean. |
+| 5 | Come back on a later day: Yesterday I asked you about Neon. Has the price changed? | Finds yesterday's chat by its date and compares the old prices with today's page. |
 
 Things to look at on each answer:
 
@@ -44,8 +44,7 @@ You see each step while it works; the answer appears once every fact has passed 
 ## Start again
 
 Chats are Markdown files in `memory/`.
-To start fresh, stop the app, delete `memory/`, and start it again: the demo chats come back, dated from that day.
-Demo chats you delete stay deleted until then.
+To start fresh, stop the app, delete `memory/`, and start it again.
 
 ## Tests
 

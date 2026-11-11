@@ -20,7 +20,6 @@ export function summary(chat: ChatRecord): ChatSummary {
     title: chat.title,
     day: chat.turns[0]?.day ?? chat.startedAt.slice(0, 10),
     startedAt: chat.startedAt,
-    demo: chat.demo === true,
   };
 }
 

@@ -46,7 +46,7 @@ A turn takes a few seconds to about 20; the user sees live progress while it wor
 
 ## Evidence on Hand
 
-No real users, testimonials or metrics. Demo chats on a fresh install must be labelled as demo.
+No real users, testimonials or metrics. No sample or staged chats: memory holds only what the user really asked.
 
 ## Product Principles
 

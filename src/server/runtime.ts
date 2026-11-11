@@ -13,7 +13,6 @@
 import { join } from "node:path";
 import { readConfig, type Config } from "../config/env.ts";
 import { MemoryStore } from "../memory/store.ts";
-import { seedDemoChats } from "../memory/demo.ts";
 import { OpenRouterClient } from "../model/openrouter.ts";
 import { SnapshotStore } from "../search/snapshots.ts";
 import { TavilyBackend } from "../search/tavily.ts";
@@ -42,15 +41,6 @@ async function build(): Promise<Runtime> {
 
   const root = process.env.MEMORY_DIR ?? join(process.cwd(), "memory");
   const { store, warnings } = await MemoryStore.open(root);
-  // A fresh copy gets the demo chats from demo/, once. Dates are read in this
-  // computer's time zone: the app runs on the user's own machine.
-  const demo = await seedDemoChats({
-    demoDir: join(process.cwd(), "demo"),
-    memoryDir: root,
-    store,
-    now: new Date(),
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-  });
   const pages = await SnapshotStore.open(join(root, "pages"));
   const now = () => new Date();
 
@@ -72,7 +62,7 @@ async function build(): Promise<Runtime> {
     };
   };
 
-  return { ok: true, config, store, deps, warnings: [...warnings, ...demo.warnings, ...pages.warnings] };
+  return { ok: true, config, store, deps, warnings: [...warnings, ...pages.warnings] };
 }
 
 export async function getRuntime(): Promise<Runtime> {
