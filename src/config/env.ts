@@ -11,7 +11,8 @@ export type Config = {
   openRouterApiKey: string;
   tavilyApiKey: string;
   model: string;
-  guardModel: string;
+  /** null when the safety check is turned off with GUARD_MODEL=off. */
+  guardModel: string | null;
   dailySearches: number;
   dailyModelUsd: number;
 };
@@ -40,7 +41,8 @@ export function readConfig(env: Env): ConfigResult {
   }
 
   const model = env.MODEL?.trim() || DEFAULT_MODEL;
-  const guardModel = env.GUARD_MODEL?.trim() || DEFAULT_GUARD_MODEL;
+  const guardSetting = env.GUARD_MODEL?.trim() || DEFAULT_GUARD_MODEL;
+  const guardModel = /^(off|none|false|0)$/i.test(guardSetting) ? null : guardSetting;
 
   const number = (name: string, fallback: number) => {
     const raw = env[name]?.trim();

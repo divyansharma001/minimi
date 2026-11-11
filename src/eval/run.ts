@@ -34,7 +34,9 @@ if (!config.ok) {
   process.exit(1);
 }
 const model = new OpenRouterClient(config.config.openRouterApiKey, config.config.model);
-const guard = new OpenRouterClient(config.config.openRouterApiKey, config.config.guardModel);
+const guard = config.config.guardModel
+  ? new OpenRouterClient(config.config.openRouterApiKey, config.config.guardModel)
+  : undefined;
 const today = EVAL_NOW.slice(0, 10);
 const now = () => new Date(EVAL_NOW);
 
@@ -60,7 +62,7 @@ async function runCase(testCase: EvalCase) {
 
   const result = await runTurn(
     { ...(chatId ? { chatId } : {}), message: testCase.question },
-    { model, guard, store, search: { backend: web, fetcher: web, snapshots, now, timeZone: EVAL_TIME_ZONE }, now, timeZone: EVAL_TIME_ZONE },
+    { model, ...(guard ? { guard } : {}), store, search: { backend: web, fetcher: web, snapshots, now, timeZone: EVAL_TIME_ZONE }, now, timeZone: EVAL_TIME_ZONE },
   );
   return { testCase, result, score: scoreCase(testCase, result.trace) };
 }

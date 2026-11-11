@@ -53,3 +53,10 @@ test("daily caps can be set, and a bad value is a clear problem", () => {
   assert.equal(bad.ok, false);
   if (!bad.ok) assert.match(bad.problems[0] ?? "", /DAILY_SEARCH_LIMIT must be a number/);
 });
+
+test("the safety model can be turned off", () => {
+  for (const value of ["off", "OFF", "none"]) {
+    const result = readConfig({ ...keys, GUARD_MODEL: value });
+    assert.equal(result.ok && result.config.guardModel, null, value);
+  }
+});
