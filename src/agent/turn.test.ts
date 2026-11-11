@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { MemoryStore } from "../memory/store.ts";
 import { SnapshotStore } from "../search/snapshots.ts";
-import type { ModelClient, ModelReply, ModelRequest } from "../model/types.ts";
+import { ModelError, type ModelClient, type ModelReply, type ModelRequest } from "../model/types.ts";
 import { EVAL_NOW, EVAL_TIME_ZONE } from "../eval/fixtures/history.ts";
 import { fixturePages } from "../eval/fixtures/web.ts";
 import { FixtureWeb } from "../eval/fixture-web.ts";
@@ -323,6 +323,23 @@ test("a repair that cannot be applied exactly falls back to a full re-write", as
   assert.match(result.problems.join(" "), /could not be applied exactly, so the answer was written again/);
   assert.deepEqual(result.claims.map((c) => c.text), ["Basalt Pro is $79 a month"]);
   assert.equal(result.checks.repairRounds, 1);
+});
+
+test("a research call that times out ends the research, not the turn", async () => {
+  const timeout = () => {
+    throw new ModelError("timeout", "The model did not answer within 30 seconds.");
+  };
+  const model = new ScriptedModel([
+    search({ queries: ["Basalt pricing"] }),
+    timeout,
+    json({ answer: "Pro is $79 [1].", claims: [{ text: "Basalt Pro is $79 a month", source: 1, quote: "Pro: $79 / month", status: "supported", oldClaim: null }] }),
+  ]);
+  const result = await runTurn({ message: "How much is Basalt's Pro plan?" }, { ...deps, model });
+  assert.equal(result.answer, "Pro is $79 [1].");
+  assert.deepEqual(result.claims.map((c) => c.text), ["Basalt Pro is $79 a month"]);
+  assert.match(result.problems.join(" "), /research call failed \(The model did not answer within 30 seconds\.\)/);
+  const steps = deps.store.answersFor(result.chatId)[0]?.process?.steps.map((s) => s.text) ?? [];
+  assert.ok(steps.some((s) => s.startsWith("Searching stopped early")), steps.join(" | "));
 });
 
 test("a claim with no problems needs no repair round", async () => {

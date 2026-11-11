@@ -217,13 +217,23 @@ export async function runTurn(
     const research = async (messages: ChatMessage[], rounds: number) => {
       for (let round = 0; round < rounds; round += 1) {
         if (pastDeadline()) return;
-        const reply = await deps.model.complete({
-          messages,
-          tools: [WEB_SEARCH_TOOL],
-          effort: "low",
-          maxTokens: 1_500,
-          timeoutMs: TURN_LIMITS.researchCallMs,
-        });
+        // A failed or stalled research call ends the research, not the turn:
+        // the answer is written from the evidence found so far.
+        let reply: Awaited<ReturnType<typeof deps.model.complete>>;
+        try {
+          reply = await deps.model.complete({
+            messages,
+            tools: [WEB_SEARCH_TOOL],
+            effort: "low",
+            maxTokens: 1_500,
+            timeoutMs: TURN_LIMITS.researchCallMs,
+          });
+        } catch (error) {
+          if (!(error instanceof ModelError)) throw error;
+          problems.push(`A research call failed (${error.message}), so the answer uses the evidence found so far.`);
+          note("Searching stopped early: the model did not reply in time, so the answer uses what was found");
+          return;
+        }
         count(reply.usage);
         const calls = reply.toolCalls.slice(0, TURN_LIMITS.toolCallsPerRound);
         if (calls.length === 0) return;
